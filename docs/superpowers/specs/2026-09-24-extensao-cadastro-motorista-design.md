@@ -176,3 +176,32 @@ Esperas com timeout (padrão 8 s) e mensagem clara se estourar.
 
 Operador testou no Sitra real com documentos reais: **funcionou** ("deu certo ficou bom").
 Pedido seguinte: campo de texto livre para informações enviadas por mensagem (telefone etc.).
+
+## 11. v2 — Proprietário e Veículo (aprovado em 2026-09-24)
+
+**Objetivo:** a mesma leitura preenche também as telas `/Proprietario/CadastroDeProprietario`
+e `/Veiculo/CadastroDeVeiculos`. O painel detecta qual das três telas está aberta e preenche só ela.
+Ordem de uso sugerida: Proprietário → Veículo → Motorista (o veículo exige o proprietário cadastrado).
+
+**Fontes:** proprietário = dono no CRLV/CRV (CPF ou CNPJ) + cartão ANTT (RNTRC, validade);
+veículo = CRV/CRLV (inclui o tipo do veículo); motorista ganha o campo Placa (= placa do veículo).
+
+**Regras (código, não IA):**
+- Endereço do proprietário = endereço do motorista (CEP, logradouro, número, complemento, bairro, UF, cidade).
+- Proprietário com o mesmo CPF do motorista → copia nome, RG, órgão exp., nascimento, naturalidade.
+- E-mail/telefone do proprietário vazios → os do motorista (celular).
+- IE = `ISENTO` (o Sitra aceita; recusa zeros). Nº Dependentes = `0`. Propriedade = padrão (Terceiro).
+- CIOT: Banco, Agência, Dígito, Conta, Dígito = `0`; Tipo de Conta = `1` (CC). O Sitra avisa
+  "banco sem 0 inicial" mas aceita: o preenchedor fecha esse aviso sem registrá-lo como problema.
+- Vencimento RNTRC = validade do cartão ANTT, senão hoje.
+- Veículo: CPF/CNPJ do proprietário = o do proprietário; Tipo Propriedade = padrão;
+  Venc. Licenciamento e IPVA = **amanhã** (o Sitra recusa a data de hoje: compara com `new Date()`).
+- Eixos/Capacidade: preenchidos pelo Sitra (`changeEngate`) ao escolher o tipo.
+
+**Comportamentos confirmados nos JS salvos (`Proprietario.js`, `Veiculo.js`):** handlers em `onblur`
+(`Search()`, `pesquisaCep()`, `SearchBancoText()`, `SearchProprietario()`, `CarregaCidadePorUf()`);
+`txtTipoVeiculo` também `onchange=changeEngate()`. Proprietário novo pode abrir `#ModalAsk`
+("buscar na Receita?") → o preenchedor clica `#btnPerguntaNao` (única exceção à regra de não clicar:
+responde a pergunta, não salva). Existente: proprietário → `txtProprietarioId` preenchido; veículo →
+`txtStatusVeiculo` preenchido → parar. Placa: máscara `SSS-0A00` (8 caracteres). CPF/CNPJ: 14 ou 18 caracteres.
+Cidade de registro do veículo é `<select>` carregado após a UF (valores em MAIÚSCULAS).
