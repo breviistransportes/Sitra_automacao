@@ -1,7 +1,7 @@
 import { lerEntrada, prepararDocumentos, temConteudo } from '../lib/entrada.js';
 import { redimensionarImagem } from '../lib/imagem.js';
 import { chamarGemini, posProcessar } from '../lib/extrator.js';
-import { lerConfig } from '../lib/config.js';
+import { lerConfig, salvarConfig } from '../lib/config.js';
 import { montarFormulario, lerFormulario, mostrarAba } from './formulario.js';
 import { versaoMaior } from '../lib/versao.js';
 import { TELAS, CAMPO_POR_CHAVE } from '../lib/campos.js';
@@ -62,8 +62,7 @@ async function lerDocumentos() {
   mensagem('');
   const cfg = await lerConfig();
   if (!cfg.apiKey) {
-    mensagem('Configure a chave da API do Gemini primeiro.');
-    chrome.runtime.openOptionsPage();
+    await abrirConfig('Cole a chave da API do Gemini e clique em Salvar.');
     return;
   }
   mostrar('lendo');
@@ -168,7 +167,9 @@ $('btn-preencher').addEventListener('click', (e) => { e.preventDefault(); preenc
 $('btn-recomecar').addEventListener('click', recomecar);
 $('btn-novo').addEventListener('click', recomecar);
 $('btn-voltar').addEventListener('click', () => { mensagem(''); mostrar('conferencia'); });
-$('link-config').addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.openOptionsPage(); });
+$('link-config').addEventListener('click', (e) => { e.preventDefault(); abrirConfig(); });
+$('cfg-salvar').addEventListener('click', salvarConfigPainel);
+$('cfg-fechar').addEventListener('click', () => { $('config').hidden = true; mensagem(''); });
 $('form-conferencia').addEventListener('input', (e) => e.target.closest('label')?.classList.remove('conferir'));
 $('form-conferencia').addEventListener('submit', (e) => e.preventDefault());
 $('form-conferencia').addEventListener('click', (e) => {
@@ -191,3 +192,28 @@ async function verificarAtualizacao() {
   }
 }
 verificarAtualizacao();
+
+// Configurações dentro do próprio painel (não depende da página de opções do Chrome).
+async function abrirConfig(aviso = '') {
+  const cfg = await lerConfig();
+  $('cfg-apiKey').value = cfg.apiKey;
+  $('cfg-nacionalidade').value = cfg.padroes.nacionalidade;
+  $('cfg-propriedade').value = cfg.padroes.propriedade;
+  $('config').hidden = false;
+  mensagem(aviso, 'alerta');
+  $('cfg-apiKey').focus();
+}
+
+async function salvarConfigPainel() {
+  const apiKey = $('cfg-apiKey').value.trim();
+  if (!apiKey) { mensagem('Cole a chave da API do Gemini.'); return; }
+  await salvarConfig({
+    apiKey,
+    padroes: { nacionalidade: $('cfg-nacionalidade').value.trim().toUpperCase(), propriedade: $('cfg-propriedade').value },
+  });
+  $('config').hidden = true;
+  mensagem('Configurações salvas.', 'alerta');
+}
+
+// Primeira vez (sem chave salva): já abre as configurações.
+lerConfig().then(cfg => { if (!cfg.apiKey) abrirConfig('Primeiro uso: cole a chave da API do Gemini e clique em Salvar.'); }).catch(() => {});

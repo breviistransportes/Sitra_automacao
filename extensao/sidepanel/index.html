@@ -10,6 +10,24 @@
   <p id="atualizacao" hidden><a id="link-atualizacao" target="_blank" rel="noopener"></a></p>
   <p id="mensagem" hidden></p>
 
+  <section id="config" hidden>
+    <h2>Configurações</h2>
+    <label>Chave da API do Gemini
+      <input id="cfg-apiKey" type="password" autocomplete="off" placeholder="AIza...">
+    </label>
+    <small>Use uma chave de projeto com cobrança ativada: no plano gratuito o Google pode usar os documentos enviados.</small>
+    <label>Nacionalidade padrão
+      <input id="cfg-nacionalidade">
+    </label>
+    <label>Propriedade padrão
+      <select id="cfg-propriedade"><option value="1">Da Casa</option><option value="2">Agregado</option><option value="3">Terceiro</option></select>
+    </label>
+    <div class="acoes">
+      <button id="cfg-salvar">Salvar</button>
+      <button id="cfg-fechar" class="secundario">Fechar</button>
+    </div>
+  </section>
+
   <section data-etapa="entrada">
     <label id="zona">
       <strong>Solte aqui os documentos do motorista</strong>
