@@ -13,12 +13,16 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
   const esperar = (ms) => new Promise(r => win.setTimeout(r, ms));
   const valorDe = (chave) => el(CAMPO_POR_CHAVE[chave].id)?.value ?? '';
 
+  // O ViaCEP (pesquisaCep) é JSONP entre domínios: o jQuery 1.11 não o conta em jQuery.active,
+  // então também esperamos a tag <script> do ViaCEP sumir.
+  const ocupado = () => (win.jQuery?.active ?? 0) > 0 || !!doc.querySelector('script[src*="viacep.com.br"]');
+
   async function aguardarSitra() {
     const fim = Date.now() + timeoutMs;
     let ociosos = 0;
     await esperar(intervaloMs);
     while (Date.now() < fim) {
-      ociosos = (win.jQuery?.active ?? 0) === 0 ? ociosos + 1 : 0;
+      ociosos = ocupado() ? 0 : ociosos + 1;
       if (ociosos >= 2) return;
       await esperar(intervaloMs);
     }
@@ -55,6 +59,9 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
       e.value = valores[chave];
       e.dispatchEvent(new win.Event('input', { bubbles: true }));
       e.dispatchEvent(new win.Event('change', { bubbles: true }));
+      // O Sitra dispara Search()/pesquisaCep()/CarregaCidade* no onblur, não no onchange.
+      e.dispatchEvent(new win.Event('blur'));
+      e.dispatchEvent(new win.Event('focusout', { bubbles: true }));
     };
     const definirSeTiver = (chave) => { if (valores[chave]) definir(chave); };
     const registrarModal = () => {
@@ -66,6 +73,14 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
     if (!estado().naPagina) return falha('Abra a tela Cadastro de Motoristas do Sitra nesta aba.');
 
     try {
+      // 0. Se o foco está no CPF/CEP (o "Limpar" do Sitra foca o CPF), tira agora: um blur
+      //    real depois do preenchimento rodaria Search()/pesquisaCep() e apagaria/trocaria tudo.
+      const ativo = doc.activeElement;
+      if (ativo && [CAMPO_POR_CHAVE.cpf.id, CAMPO_POR_CHAVE.cep.id].includes(ativo.id)) {
+        ativo.blur();
+        await aguardarSitra();
+      }
+
       // 1. CPF primeiro: o Search() do Sitra limpa o formulário quando o CPF é novo.
       definir('cpf');
       await aguardarSitra();

@@ -57,30 +57,38 @@ const semRedimensionar = async (bytes, nome) => ({ bytes, mediaType: /\.png$/i.t
 export async function prepararDocumentos(itens, { redimensionar = semRedimensionar, limiteBytes = 18 * MB } = {}) {
   const textos = [], imagens = [], pdfs = [], avisos = [];
   let total = 0;
+  // Soma a cada arquivo e para cedo: não adianta redimensionar o resto se já passou do limite.
+  const somar = (tamanho) => {
+    total += tamanho;
+    if (total > limiteBytes) {
+      throw new Error(`Os arquivos somam mais de ${Math.round(limiteBytes / MB)} MB. Remova alguns e tente de novo. Se for um .zip da conversa, solte só as fotos e PDFs dos documentos.`);
+    }
+  };
   for (const it of itens) {
     if (it.tipo === 'texto') {
-      textos.push({ nome: it.nome, conteudo: new TextDecoder('utf-8').decode(it.bytes) });
+      const conteudo = new TextDecoder('utf-8').decode(it.bytes);
+      somar(it.bytes.length);
+      textos.push({ nome: it.nome, conteudo });
     } else if (it.tipo === 'pdf') {
       if (pdfProtegido(it.bytes)) {
         avisos.push(`${it.nome}: PDF protegido por senha — não foi lido`);
         continue;
       }
       const base64 = paraBase64(it.bytes);
-      total += base64.length;
+      somar(base64.length);
       pdfs.push({ nome: it.nome, base64 });
     } else if (it.tipo === 'imagem') {
+      let r;
       try {
-        const r = await redimensionar(it.bytes, it.nome);
-        const base64 = paraBase64(r.bytes);
-        total += base64.length;
-        imagens.push({ nome: it.nome, mediaType: r.mediaType, base64 });
+        r = await redimensionar(it.bytes, it.nome);
       } catch {
         avisos.push(`${it.nome}: imagem não pôde ser aberta`);
+        continue;
       }
+      const base64 = paraBase64(r.bytes);
+      somar(base64.length);
+      imagens.push({ nome: it.nome, mediaType: r.mediaType, base64 });
     }
-  }
-  if (total > limiteBytes) {
-    throw new Error(`Os arquivos somam mais de ${Math.round(limiteBytes / MB)} MB. Remova alguns e tente de novo.`);
   }
   return { textos, imagens, pdfs, avisos };
 }

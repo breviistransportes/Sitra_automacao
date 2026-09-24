@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { JSDOM } from 'jsdom';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { criarPreenchedor } from '../src/content/preenchedor.js';
 
 const HTML = readFileSync(new URL('./fixtures/sitra.html', import.meta.url), 'utf8');
@@ -26,8 +26,15 @@ function criarSitra({ url = URL_SITRA, search, pesquisaCep } = {}) {
   const limparCampos = () => {
     for (const el of doc.querySelectorAll('input, select')) if (el.id !== 'txtMotoristaCpf') el.value = '';
   };
+  // ViaCEP é JSONP entre domínios: NÃO conta no jQuery.active; a tag <script> some quando responde.
+  const jsonp = (fn, ms = 200) => {
+    const s = doc.createElement('script');
+    s.setAttribute('src', '//viacep.com.br/ws/01310-100/json/?callback=jQuery123');
+    doc.head.append(s);
+    setTimeout(() => { fn(); s.remove(); }, ms);
+  };
   win.Search = () => ajax(search ?? limparCampos);
-  win.pesquisaCep = () => ajax(pesquisaCep ?? (() => {}));
+  win.pesquisaCep = () => jsonp(pesquisaCep ?? (() => {}));
   win.CarregaCidadePorUf = () => ajax(() => {});
   win.CarregaCidadePorUfNatu = () => ajax(() => {});
   const p = criarPreenchedor(win, { timeoutMs: 1000, intervaloMs: 5 });
@@ -122,6 +129,42 @@ describe('preenchedor', () => {
     const rel = await p.preencher(VALORES);
     expect(rel.ok).toBe(false);
     expect(rel.erro).toMatch(/demorou demais/);
+  });
+
+  it('ViaCEP que apaga logradouro/bairro chega antes do relatório (espera o JSONP)', async () => {
+    const { p, val, doc } = criarSitra({
+      pesquisaCep: () => {
+        doc.getElementById('txtEndereco').value = '';
+        doc.getElementById('txtBairro').value = '';
+        doc.getElementById('txtUf').value = 'SP';
+        doc.getElementById('txtCidade').value = 'SÃO PAULO';
+      },
+    });
+    const rel = await p.preencher(VALORES);
+    await new Promise(r => setTimeout(r, 300));
+    expect(val('txtEndereco')).toBe('AVENIDA PAULISTA');
+    expect(val('txtBairro')).toBe('BELA VISTA');
+    expect(rel.campos.find(c => c.chave === 'endereco').status).toBe('ok');
+  });
+
+  it('não deixa o foco no CPF (um blur depois apagaria tudo)', async () => {
+    const { p, doc } = criarSitra();
+    doc.getElementById('txtMotoristaCpf').focus();
+    await p.preencher(VALORES);
+    expect(doc.activeElement.id).not.toBe('txtMotoristaCpf');
+    expect(doc.activeElement.id).not.toBe('txtCep');
+  });
+
+  it('a cópia de teste usa os mesmos handlers da página real do Sitra', () => {
+    const real = new URL('../campos_necessarios/Cadastro De Motoristas.html', import.meta.url);
+    if (!existsSync(real)) return; // página salva fica fora do git
+    const html = readFileSync(real, 'utf8');
+    for (const [id, handler] of [['txtMotoristaCpf', 'onblur="Search()"'], ['txtCep', 'onblur="pesquisaCep()"'], ['txtUf', 'onblur="CarregaCidadePorUf()"'], ['txtNaturalidadeUf', 'onblur="CarregaCidadePorUfNatu()"']]) {
+      const tagReal = html.match(new RegExp(`<(input|select)[^>]*id="${id}"[^>]*>`))[0];
+      const tagFixture = HTML.match(new RegExp(`<(input|select)[^>]*id="${id}"[^>]*>`))[0];
+      expect(tagReal).toContain(handler);
+      expect(tagFixture).toContain(handler);
+    }
   });
 
   it('estado() informa página e formulário vazio', () => {

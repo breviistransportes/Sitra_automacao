@@ -98,6 +98,19 @@ describe('prepararDocumentos', () => {
       .rejects.toThrow('Remova alguns');
   });
 
+  it('para cedo ao passar do limite (não redimensiona o resto) e explica o caso do zip', async () => {
+    let chamadas = 0;
+    const redimensionar = async (bytes) => { chamadas++; return { bytes, mediaType: 'image/jpeg' }; };
+    const itens = Array.from({ length: 10 }, (_, i) => ({ nome: `f${i}.jpg`, tipo: 'imagem', bytes: enc('x'.repeat(30)) }));
+    await expect(prepararDocumentos(itens, { redimensionar, limiteBytes: 100 })).rejects.toThrow('.zip');
+    expect(chamadas).toBeLessThan(10);
+  });
+
+  it('o texto da conversa conta no limite', async () => {
+    await expect(prepararDocumentos([{ nome: '_chat.txt', tipo: 'texto', bytes: enc('x'.repeat(200)) }], { limiteBytes: 100 }))
+      .rejects.toThrow('Remova alguns');
+  });
+
   it('limite padrão é 18 MB', async () => {
     const grande = new Uint8Array(14 * 1024 * 1024);
     await expect(prepararDocumentos([{ nome: 'a.pdf', tipo: 'pdf', bytes: grande }])).rejects.toThrow('mais de 18 MB');

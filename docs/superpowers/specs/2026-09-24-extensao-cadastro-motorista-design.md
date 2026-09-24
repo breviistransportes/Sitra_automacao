@@ -25,10 +25,10 @@ e a extensão preenche o formulário do Sitra. **O operador clica em "Cadastrar"
   campos das abas ocultas já existem no DOM → preencher sem trocar de aba.
 - Campos com máscara por classe CSS: `cpf`, `cep`, `date`, `sp_celphones`, `rg`, `placa`.
 - Handlers com efeito colateral:
-  - `txtMotoristaCpf` onchange `Search()` — busca motorista existente
-  - `txtCep` onchange `pesquisaCep()` — preenche endereço/bairro/UF/cidade
-  - `txtUf` onchange `CarregaCidadePorUf()` — carrega autocomplete de `txtCidade`
-  - `txtNaturalidadeUf` onchange `CarregaCidadePorUfNatu()` — autocomplete de `txtNaturalidade`
+  - `txtMotoristaCpf` **onblur** `Search()` — busca motorista existente
+  - `txtCep` **onblur** `pesquisaCep()` — preenche endereço/bairro/UF/cidade
+  - `txtUf` **onblur** `CarregaCidadePorUf()` — carrega autocomplete de `txtCidade`
+  - `txtNaturalidadeUf` **onblur** `CarregaCidadePorUfNatu()` — autocomplete de `txtNaturalidade`
 - Atenção: nomes de `id` não batem com o rótulo em dois casos da CNH (ver tabela).
   Confirmado no `Motorista.js`: `txtNumeroCnh` é enviado como `Habilitacao` (obrigatório).
 
@@ -135,7 +135,7 @@ fixas: `SOLTEIRO`, `CASADO`, `DIVORC.`, `VIUVO`, `SEPARADO`, `UNIAO EST`.
 7. Verificação: reler cada campo e reportar ✅/⚠️ no painel.
 8. Parar. Operador confere e clica "Cadastrar".
 
-Eventos: definir `.value` e disparar `input`, `change`, `blur` nativos (jQuery e
+Eventos: definir `.value` e disparar `input`, `change`, `blur` e `focusout` nativos — os handlers do Sitra estão em `onblur` (corrigido em 2026-09-24; a primeira versão da spec dizia onchange). O ViaCEP é JSONP e não conta em `jQuery.active`: esperar também a tag `<script>` do viacep sumir. Tirar o foco do CPF/CEP antes de preencher.
 atributos `onchange` inline recebem eventos nativos). Sem cliques em botões.
 Esperas com timeout (padrão 8 s) e mensagem clara se estourar.
 
