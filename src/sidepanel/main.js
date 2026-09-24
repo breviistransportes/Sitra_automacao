@@ -3,6 +3,7 @@ import { redimensionarImagem } from '../lib/imagem.js';
 import { chamarGemini, posProcessar } from '../lib/extrator.js';
 import { lerConfig } from '../lib/config.js';
 import { montarFormulario, lerFormulario, mostrarAba } from './formulario.js';
+import { versaoMaior } from '../lib/versao.js';
 import { TELAS, CAMPO_POR_CHAVE } from '../lib/campos.js';
 
 // Documento que identifica o cadastro em cada tela do Sitra.
@@ -174,3 +175,19 @@ $('form-conferencia').addEventListener('click', (e) => {
   const aba = e.target.closest('.aba');
   if (aba) mostrarAba($('form-conferencia'), aba.dataset.tela);
 });
+
+// Aviso de versão nova publicada no GitHub (Releases). Sem internet ou sem release: não mostra nada.
+async function verificarAtualizacao() {
+  try {
+    const r = await fetch('https://api.github.com/repos/breviistransportes/Sitra_automacao/releases/latest');
+    if (!r.ok) return;
+    const { tag_name: tag, html_url: url } = await r.json();
+    if (!versaoMaior(tag, chrome.runtime.getManifest().version)) return;
+    $('link-atualizacao').href = url;
+    $('link-atualizacao').textContent = `Nova versão ${tag} disponível — baixar`;
+    $('atualizacao').hidden = false;
+  } catch {
+    // silencioso: o aviso é só uma conveniência
+  }
+}
+verificarAtualizacao();

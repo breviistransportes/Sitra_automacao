@@ -25,3 +25,4 @@ legend { font-weight: 600; }
 .abas { display: flex; gap: 4px; margin-bottom: 8px; position: sticky; top: 0; background: var(--fundo); padding: 4px 0; }
 .aba { background: #eee; color: var(--texto); flex: 1; padding: 6px; }
 .aba.ativa { background: var(--laranja); color: #fff; }
+#atualizacao { background: #e3f2fd; padding: 6px 8px; border-radius: 4px; }
