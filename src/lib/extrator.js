@@ -31,6 +31,11 @@ Outros documentos:
 - celular, fone_residencial e email: da conversa (inclusive o número de quem enviou, se aparecer no cabeçalho das mensagens) ou de documentos. Telefones com DDD.
 - estado_civil e nacionalidade: só se estiverem escritos em algum documento ou na conversa.
 
+Mensagens do motorista (texto colado pelo operador, se houver):
+- Use para os campos que não estão nos documentos: celular, fone_residencial, email, estado_civil, complemento e outros. fonte = "mensagem".
+- Se a mensagem contradisser um documento (nome, CPF, datas, CNH, RG), o documento prevalece: use o valor do documento e registre a divergência em avisos. Exceção: telefones, e-mail e estado civil podem vir da mensagem.
+- Se não houver nenhum documento, extraia tudo o que estiver escrito nas mensagens.
+
 documentos_encontrados: lista curta dos tipos identificados (ex.: "CNH-e", "Comprovante de endereço", "CRLV").
 avisos: problemas úteis para quem vai conferir — documento ilegível, CNH ou comprovante de endereço ausente, CNH vencida, nomes diferentes entre documentos.`;
 
@@ -62,7 +67,7 @@ export function montarSchema() {
   };
 }
 
-export function montarPartes({ textos, imagens, pdfs }) {
+export function montarPartes({ textos, imagens, pdfs, mensagens }) {
   return [
     ...pdfs.flatMap(p => [
       { text: `Arquivo: ${p.nome}` },
@@ -73,6 +78,7 @@ export function montarPartes({ textos, imagens, pdfs }) {
       { inlineData: { mimeType: i.mediaType, data: i.base64 } },
     ]),
     ...textos.map(t => ({ text: `Conversa do WhatsApp (${t.nome}):\n${t.conteudo}` })),
+    ...(mensagens?.trim() ? [{ text: `Mensagens do motorista (coladas pelo operador):\n${mensagens.trim()}` }] : []),
     { text: 'Extraia os campos do cadastro conforme as instruções.' },
   ];
 }

@@ -1,4 +1,4 @@
-import { lerEntrada, prepararDocumentos } from '../lib/entrada.js';
+import { lerEntrada, prepararDocumentos, temConteudo } from '../lib/entrada.js';
 import { redimensionarImagem } from '../lib/imagem.js';
 import { chamarGemini, posProcessar } from '../lib/extrator.js';
 import { lerConfig } from '../lib/config.js';
@@ -40,7 +40,11 @@ function listarArquivos() {
     li.append(b);
     ul.append(li);
   });
-  $('btn-ler').disabled = arquivos.length === 0;
+  atualizarBotaoLer();
+}
+
+function atualizarBotaoLer() {
+  $('btn-ler').disabled = arquivos.length === 0 && !$('mensagens').value.trim();
 }
 
 function adicionar(lista) {
@@ -61,12 +65,13 @@ async function lerDocumentos() {
   try {
     const entrada = await lerEntrada(arquivos);
     const docs = await prepararDocumentos(entrada.itens, { redimensionar: redimensionarImagem });
+    docs.mensagens = $('mensagens').value;
     const avisosEntrada = [
       ...entrada.naoSuportados.map(n => `${n}: formato não suportado — solte os arquivos direto ou use .zip`),
       ...docs.avisos,
     ];
-    if (docs.imagens.length + docs.pdfs.length === 0) {
-      throw new Error(['Nenhuma foto/PDF encontrada.', ...avisosEntrada].join(' '));
+    if (!temConteudo(docs, docs.mensagens)) {
+      throw new Error(['Nenhuma foto/PDF encontrada e nenhuma mensagem colada.', ...avisosEntrada].join(' '));
     }
     const r = posProcessar(await chamarGemini(cfg.apiKey, docs), cfg.padroes);
     $('form-conferencia').innerHTML = montarFormulario(r.valores);
@@ -137,6 +142,7 @@ async function preencherSitra() {
 
 function recomecar() {
   arquivos = [];
+  $('mensagens').value = '';
   listarArquivos();
   mensagem('');
   $('btn-ler').textContent = 'Ler documentos';
@@ -148,6 +154,7 @@ $('zona').addEventListener('dragleave', () => $('zona').classList.remove('ativa'
 $('zona').addEventListener('drop', (e) => { e.preventDefault(); $('zona').classList.remove('ativa'); adicionar([...e.dataTransfer.files]); });
 $('seletor').addEventListener('change', (e) => { adicionar([...e.target.files]); e.target.value = ''; });
 $('btn-ler').addEventListener('click', lerDocumentos);
+$('mensagens').addEventListener('input', atualizarBotaoLer);
 $('btn-preencher').addEventListener('click', (e) => { e.preventDefault(); preencherSitra(); });
 $('btn-recomecar').addEventListener('click', recomecar);
 $('btn-novo').addEventListener('click', recomecar);

@@ -51,7 +51,12 @@ export function pdfProtegido(bytes) {
   return new TextDecoder('latin1').decode(bytes).includes('/Encrypt');
 }
 
-const semRedimensionar = async (bytes, nome) => ({ bytes, mediaType: /\.png$/i.test(nome) ? 'image/png' : 'image/jpeg' });
+// Há o que ler? Documentos (foto/PDF) ou mensagens coladas pelo operador.
+export function temConteudo(docs, mensagens) {
+  return docs.imagens.length + docs.pdfs.length > 0 || !!mensagens?.trim();
+}
+
+const semRedimensionar =async (bytes, nome) => ({ bytes, mediaType: /\.png$/i.test(nome) ? 'image/png' : 'image/jpeg' });
 
 // Limite de 18 MB (em base64) para caber no envio inline da API do Gemini.
 export async function prepararDocumentos(itens, { redimensionar = semRedimensionar, limiteBytes = 18 * MB } = {}) {

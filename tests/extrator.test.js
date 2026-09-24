@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CAMPOS } from '../src/lib/campos.js';
 import {
-  MODELO, CAMPOS_IA, montarSchema, montarPartes, chamarGemini, posProcessar, ErroExtracao,
+  MODELO, CAMPOS_IA, INSTRUCOES, montarSchema, montarPartes, chamarGemini, posProcessar, ErroExtracao,
 } from '../src/lib/extrator.js';
 
 const DOCS = {
@@ -41,6 +41,30 @@ describe('schema e partes', () => {
     expect(p[3]).toEqual({ inlineData: { mimeType: 'image/jpeg', data: 'AAA' } });
     expect(p[4].text).toContain('+55 11 98765-4321');
     expect(p).toHaveLength(6);
+  });
+});
+
+describe('mensagens coladas pelo operador', () => {
+  it('entram como texto antes do pedido final', () => {
+    const p = montarPartes({ ...DOCS, mensagens: '  meu cel é 31 98888-7777, sou casado  ' });
+    expect(p).toHaveLength(7);
+    expect(p[5].text).toContain('Mensagens do motorista');
+    expect(p[5].text).toContain('meu cel é 31 98888-7777, sou casado');
+    expect(p[6].text).toContain('Extraia');
+  });
+
+  it('mensagem vazia não gera parte', () => {
+    expect(montarPartes({ ...DOCS, mensagens: '   ' })).toHaveLength(6);
+  });
+
+  it('só mensagens, sem documentos', () => {
+    const p = montarPartes({ textos: [], imagens: [], pdfs: [], mensagens: 'CPF 529.982.247-25' });
+    expect(p.map(x => Object.keys(x)[0])).toEqual(['text', 'text']);
+  });
+
+  it('instruções dizem como usar as mensagens', () => {
+    expect(INSTRUCOES).toContain('"mensagem"');
+    expect(INSTRUCOES).toMatch(/documento prevalece/i);
   });
 });
 

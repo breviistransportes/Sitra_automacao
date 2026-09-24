@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import JSZip from 'jszip';
-import { classificar, lerEntrada, prepararDocumentos, paraBase64, pdfProtegido } from '../src/lib/entrada.js';
+import { classificar, lerEntrada, prepararDocumentos, paraBase64, pdfProtegido, temConteudo } from '../src/lib/entrada.js';
 
 const arq = (name, conteudo) => ({
   name,
@@ -51,6 +51,16 @@ describe('lerEntrada', () => {
   it('zip corrompido vira não suportado em vez de quebrar', async () => {
     const r = await lerEntrada([arq('ruim.zip', 'não é zip')]);
     expect(r.naoSuportados).toEqual(['ruim.zip (zip corrompido)']);
+  });
+});
+
+describe('temConteudo', () => {
+  const vazio = { textos: [], imagens: [], pdfs: [] };
+  it('aceita documentos ou mensagens; recusa nada', () => {
+    expect(temConteudo({ ...vazio, pdfs: [{}] }, '')).toBe(true);
+    expect(temConteudo(vazio, 'celular 11 98765-4321')).toBe(true);
+    expect(temConteudo(vazio, '   ')).toBe(false);
+    expect(temConteudo({ ...vazio, textos: [{}] }, '')).toBe(false);
   });
 });
 
