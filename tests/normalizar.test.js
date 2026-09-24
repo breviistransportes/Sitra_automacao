@@ -106,4 +106,10 @@ describe('normalizar', () => {
   it('chassi sem espaços, maiúsculo', () => {
     expect(normalizarCampo(CAMPO_POR_CHAVE.veic_chassi, '9bm 958074 cb123456')).toBe('9BM958074CB123456');
   });
+
+  it('RNTRC: o Sitra pede os 9 últimos dígitos', () => {
+    expect(normalizarCampo(CAMPO_POR_CHAVE.prop_rntrc, '012345678')).toBe('012345678');
+    expect(normalizarCampo(CAMPO_POR_CHAVE.prop_rntrc, '000.012.345.678')).toBe('012345678');
+    expect(normalizarCampo(CAMPO_POR_CHAVE.prop_rntrc, '12345678')).toBe('12345678');
+  });
 });

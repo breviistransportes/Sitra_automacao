@@ -169,8 +169,8 @@ describe('preenchedor', () => {
 
   it('estado() informa página e formulário vazio', () => {
     const { p, doc } = criarSitra();
-    expect(p.estado()).toEqual({ naPagina: true, vazio: true });
+    expect(p.estado()).toEqual({ tela: 'motorista', vazio: true });
     doc.getElementById('txtMotoristaNome').value = 'X';
-    expect(p.estado()).toEqual({ naPagina: true, vazio: false });
+    expect(p.estado()).toEqual({ tela: 'motorista', vazio: false });
   });
 });

@@ -1,35 +1,39 @@
 <!doctype html>
+<!-- GERADO por tests/fixtures/gerar.mjs a partir de campos_necessarios/Cadastro De Motoristas.html — não editar à mão -->
 <html><body>
-<input id="txtMotoristaCpf" class="cpf" maxlength="14" onblur="Search()">
-<input id="txtMotoristaNome" maxlength="50">
-<input id="txtStatusMotorista">
-<input id="txtCep" class="cep" maxlength="9" onblur="pesquisaCep()">
-<input id="txtEndereco" maxlength="50">
-<input id="txtNumero" maxlength="10">
-<input id="txtComplemento" maxlength="30">
-<input id="txtBairro" maxlength="30">
-<select id="txtUf" onblur="CarregaCidadePorUf()"><option value="">Selecione</option><option>MG</option><option>RJ</option><option>SP</option></select>
-<input id="txtCidade">
-<input id="txtDataNascimento" class="date" maxlength="10">
-<input id="txtEstadoCivil" maxlength="9">
-<input id="txtNomePai" maxlength="40">
-<input id="txtNomeMae" maxlength="40">
-<select id="txtNaturalidadeUf" onblur="CarregaCidadePorUfNatu()"><option value="">Selecione</option><option>MG</option><option>RJ</option><option>SP</option></select>
-<input id="txtNaturalidade" maxlength="40">
-<input id="txtNacionalidade" maxlength="20">
-<select id="txtPropriedade"><option value="">Selecione</option><option value="1">Da Casa</option><option value="2">Agregado</option><option value="3">Terceiro</option></select>
-<input id="txtResidencial" class="sp_celphones" maxlength="14">
-<input id="txtCelular" class="sp_celphones" maxlength="14">
-<input id="txtRg" class="rg" maxlength="12">
-<select id="txtUfExp"><option value="">Selecione</option><option>MG</option><option>RJ</option><option>SP</option></select>
-<input id="txtOrgExp" maxlength="10">
-<input id="txtDataExpedicao" class="date" maxlength="10">
-<input id="txtNumeroCnh" maxlength="14">
-<input id="txtRegistroCNH" maxlength="10">
-<input id="txtDataPrimeiraCnh" class="date" maxlength="10">
-<input id="txtDataEmissaoCnh" class="date" maxlength="10">
-<input id="txtDataValidadeCnh" class="date" maxlength="10">
-<input id="txtCategoriaCnh" maxlength="4">
-<input id="txtEmail" maxlength="60">
-<div id="ModalErro" style="display:none"><span id="erro"></span></div>
+<input type="text" id="txtMotoristaCpf" name="txtMotoristaCpf" class="form-control input-sm cpf" onblur="Search()" onfocusin="tabContent('dt1')" onkeydown="modals('#PesquisaMotorista', '#txtConteudoPesquisaMotorista', event)" maxlength="14">
+<input type="text" id="txtMotoristaNome" name="txtMotoristaNome" class="form-control input-sm" maxlength="50">
+<input type="text" id="txtCep" name="txtCep" class="form-control input-sm cep" onkeypress="return SomenteNumero(event)" onblur="pesquisaCep()" onkeydown="modals('#PesquisaCep', '#txtPesquisaCepUf', event)" maxlength="9" placeholder="00000-000">
+<input type="text" id="txtEndereco" name="txtEndereco" class="form-control input-sm" maxlength="50">
+<input type="text" id="txtNumero" name="txtNumero" class="form-control input-sm" maxlength="10">
+<input type="text" id="txtComplemento" name="txtComplemento" class="form-control input-sm" maxlength="30">
+<input type="text" id="txtBairro" name="txtBairro" class="form-control input-sm" maxlength="30">
+<select class="form-control input-sm" id="txtUf" name="txtUf" onblur="CarregaCidadePorUf()"><option value="">Selecione</option> <option value="AC">AC</option> <option value="AL">AL</option> <option value="AM">AM</option> <option value="AP">AP</option> <option value="BA">BA</option> <option value="CE">CE</option> <option value="DF">DF</option> <option value="ES">ES</option> <option value="EX">EX</option> <option value="GO">GO</option> <option value="MA">MA</option> <option value="MG">MG</option> <option value="MS">MS</option> <option value="MT">MT</option> <option value="PA">PA</option> <option value="PB">PB</option> <option value="PE">PE</option> <option value="PI">PI</option> <option value="PR">PR</option> <option value="RJ">RJ</option> <option value="RN">RN</option> <option value="RO">RO</option> <option value="RR">RR</option> <option value="RS">RS</option> <option value="SC">SC</option> <option value="SE">SE</option> <option value="SP">SP</option> <option value="TO">TO</option> </select>
+<input type="text" id="txtCidade" name="txtCidade" class="form-control input-sm ui-autocomplete-input" autocomplete="off">
+<input type="text" id="txtDataNascimento" name="txtDataNAscimento" class="form-control input-sm date" placeholder="DD/MM/AAAA" onfocusout="completaData(event)" maxlength="10">
+<input type="text" id="txtEstadoCivil" name="txtEstadoCivil" class="form-control input-sm" maxlength="9">
+<input type="text" id="txtNomePai" name="txtNomePai" class="form-control input-sm" maxlength="40">
+<input type="text" id="txtNomeMae" name="txtNomeMae" class="form-control input-sm" maxlength="40">
+<select class="form-control input-sm" id="txtNaturalidadeUf" name="txtNaturalidadeUf" onblur="CarregaCidadePorUfNatu()"><option value="">Selecione</option> <option value="AC">AC</option> <option value="AL">AL</option> <option value="AM">AM</option> <option value="AP">AP</option> <option value="BA">BA</option> <option value="CE">CE</option> <option value="DF">DF</option> <option value="ES">ES</option> <option value="EX">EX</option> <option value="GO">GO</option> <option value="MA">MA</option> <option value="MG">MG</option> <option value="MS">MS</option> <option value="MT">MT</option> <option value="PA">PA</option> <option value="PB">PB</option> <option value="PE">PE</option> <option value="PI">PI</option> <option value="PR">PR</option> <option value="RJ">RJ</option> <option value="RN">RN</option> <option value="RO">RO</option> <option value="RR">RR</option> <option value="RS">RS</option> <option value="SC">SC</option> <option value="SE">SE</option> <option value="SP">SP</option> <option value="TO">TO</option> </select>
+<input type="text" id="txtNaturalidade" name="txtNaturalidade" class="form-control input-sm ui-autocomplete-input" maxlength="40" autocomplete="off">
+<input type="text" id="txtNacionalidade" name="txtNacionalidade" class="form-control input-sm" maxlength="20">
+<select class="form-control input-sm" id="txtPropriedade" name="txtPropriedade"><option value="">Selecione</option> <option value="1">Da Casa</option> <option value="2">Agregado</option> <option value="3">Terceiro</option> </select>
+<input type="text" id="txtCelular" name="txtCelular" class="form-control input-sm sp_celphones" placeholder="DDD + TELEFONE" maxlength="14">
+<input type="text" id="txtResidencial" name="txtResidencial" class="form-control input-sm sp_celphones" placeholder="DDD + TELEFONE" maxlength="14">
+<input type="text" id="txtEmail" name="txtEmail" class="form-control input-sm" maxlength="60">
+<input type="text" id="txtRg" name="txtRg" class="form-control input-sm rg" maxlength="12">
+<select class="form-control input-sm" id="txtUfExp" name="txtUfExp"><option value="">Selecione</option> <option value="AC">AC</option> <option value="AL">AL</option> <option value="AM">AM</option> <option value="AP">AP</option> <option value="BA">BA</option> <option value="CE">CE</option> <option value="DF">DF</option> <option value="ES">ES</option> <option value="EX">EX</option> <option value="GO">GO</option> <option value="MA">MA</option> <option value="MG">MG</option> <option value="MS">MS</option> <option value="MT">MT</option> <option value="PA">PA</option> <option value="PB">PB</option> <option value="PE">PE</option> <option value="PI">PI</option> <option value="PR">PR</option> <option value="RJ">RJ</option> <option value="RN">RN</option> <option value="RO">RO</option> <option value="RR">RR</option> <option value="RS">RS</option> <option value="SC">SC</option> <option value="SE">SE</option> <option value="SP">SP</option> <option value="TO">TO</option> </select>
+<input type="text" id="txtOrgExp" name="txtOrgExp" class="form-control input-sm" maxlength="10">
+<input type="text" id="txtDataExpedicao" name="txtDataExpedicao" class="form-control input-sm date" placeholder="DD/MM/AAAA" onfocusout="completaData(event)" maxlength="10">
+<input type="text" id="txtNumeroCnh" name="txtNumeroCnh" class="form-control input-sm" maxlength="14">
+<input type="text" id="txtRegistroCNH" name="txtRegistroCNH" class="form-control input-sm" maxlength="10" onkeypress="return SomenteNumero(event)" data-toggle="tooltip" data-placement="right" title="Número da CNH localizado canto esquerdo, na vertical ao lado no N° de&nbsp;Registro&nbsp;da&nbsp;CNH">
+<input type="text" id="txtDataPrimeiraCnh" name="txtDataPrimeiraCnh" class="form-control input-sm date" placeholder="DD/MM/AAAA" onfocusout="completaData(event)" maxlength="10">
+<input type="text" id="txtDataEmissaoCnh" name="txtDataEmissaoCnh" class="form-control input-sm date" placeholder="DD/MM/AAAA" onfocusout="completaData(event)" maxlength="10">
+<input type="text" id="txtDataValidadeCnh" name="txtdataValidadeCnh" class="form-control input-sm date" placeholder="DD/MM/AAAA" onfocusout="completaData(event)" maxlength="10">
+<input type="text" id="txtCategoriaCnh" name="txtCategoriaCnh" class="form-control input-sm" maxlength="4">
+<input type="text" id="txtPlacaVeiculo" name="txtPlacaVeiculo" class="form-control input-sm placa" onkeydown="modals('#PesquisaVeiculo', '#txtConteudoPesquisaVeiculo', event)" onblur="searchVeiculo()" maxlength="8">
+<input type="text" id="txtStatusMotorista" name="txtStatusMotorista" class="form-control input-sm" readonly="readonly">
+<input type="text" id="txtVeiculoMarcaModeloCor" name="txtVeiculoMarcaModeloCor" class="form-control input-sm" readonly="readonly">
+<div class="modal" id="ModalErro"><b id="erro"><br></b><button type="button" class="btn btn-primary pull-right" data-dismiss="modal" onclick="limpaModal()" id="btnOk">OK</button></div>
+<div class="modal" id="ModalAsk"><b id="pergunta" style="font-size:larger;"></b><input type="button" class="btn btn-primary" data-dismiss="modal" id="btnPerguntaSim" value="SIM"><input type="button" class="btn btn-primary" data-dismiss="modal" id="btnPerguntaNao" value="NÃO"></div>
 </body></html>

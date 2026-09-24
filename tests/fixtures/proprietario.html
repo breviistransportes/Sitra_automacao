@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- GERADO por tests/fixtures/gerar.mjs a partir de campos_necessarios/CadastroDeProprietarios.html — não editar à mão -->
+<html><body>
+<input type="text" id="txtProprietarioCpfCnpj" name="txtProprietarioCpfCnpj" class="form-control input-sm cpfCnpj" onblur="Search()" onfocusin="tabContent('dt1')" onkeydown="modals('#PesquisaProprietario', '#txtConteudoPesquisaProprietario', event)" maxlength="18">
+<input type="text" id="txtNomeProprietario" name="txtNomeProprietario" class="form-control input-sm" maxlength="50">
+<input type="text" id="txtCep" name="txtCep" class="form-control input-sm cep" tabindex="4" onkeypress="return SomenteNumero(event)" onblur="pesquisaCep()" onkeydown="modals('#PesquisaCep', '#txtPesquisaCepUf', event)" placeholder="00000-000" maxlength="9">
+<input type="text" id="txtEndereco" name="txtEndereco" class="form-control input-sm" maxlength="50">
+<input type="text" id="txtNumero" name="txtNumero" class="form-control input-sm" maxlength="10">
+<input type="text" id="txtComplemento" name="txtComplemento" class="form-control input-sm" maxlength="20">
+<input type="text" id="txtBairro" name="txtBairro" class="form-control input-sm" maxlength="30">
+<select class="form-control input-sm" id="txtUf" name="txtUf" onblur="CarregaCidadePorUf()"><option value="">Selecione</option> <option value="AC">AC</option> <option value="AL">AL</option> <option value="AM">AM</option> <option value="AP">AP</option> <option value="BA">BA</option> <option value="CE">CE</option> <option value="DF">DF</option> <option value="ES">ES</option> <option value="EX">EX</option> <option value="GO">GO</option> <option value="MA">MA</option> <option value="MG">MG</option> <option value="MS">MS</option> <option value="MT">MT</option> <option value="PA">PA</option> <option value="PB">PB</option> <option value="PE">PE</option> <option value="PI">PI</option> <option value="PR">PR</option> <option value="RJ">RJ</option> <option value="RN">RN</option> <option value="RO">RO</option> <option value="RR">RR</option> <option value="RS">RS</option> <option value="SC">SC</option> <option value="SE">SE</option> <option value="SP">SP</option> <option value="TO">TO</option> </select>
+<input type="text" id="txtCidade" name="txtCidade" class="form-control input-sm ui-autocomplete-input" autocomplete="off">
+<input type="text" id="txtIE" name="txtIE" class="form-control input-sm ie" maxlength="16" data-toggle="popover" data-trigger="hover" data-content="Informar Isento caso não possua I.E" onblur="trim()" data-original-title="" title="">
+<input type="text" id="txtRG" name="txtRG" class="form-control input-sm rg" maxlength="12">
+<input type="text" id="txtOrgExp" name="txtOrgExp" class="form-control input-sm" maxlength="10" data-toggle="tooltip" data-placement="right" title="Para Integração de CIOT PAMCARD, favor Informar primeiro a UF do estado emissor do RG.">
+<input type="text" id="txtRntrc" name="txtRntrc" class="form-control input-sm rntrc" onkeypress="return SomenteNumero(event)" data-toggle="popover" data-trigger="hover" maxlength="9" data-content="Favor,informe os 9 últimos números do RNTRC." data-original-title="" title="">
+<input type="text" id="txtDataEmissaoRntrc" name="txtDataEmissaoRntrc" class="form-control input-sm date" placeholder="DD/MM/AAAA" onkeypress="return SomenteNumero(event)" onfocusout="completaData(event)" maxlength="10">
+<input type="text" id="txtVencimentoRntrc" name="txtVencimentoRntrc" class="form-control input-sm date" placeholder="DD/MM/AAAA" onkeypress="return SomenteNumero(event)" onfocusout="completaData(event)" maxlength="10">
+<input type="text" id="txtDataNascimento" name="txtDataNascimento" class="form-control input-sm date" maxlength="10" placeholder="DD/MM/AAAA" onkeypress="return SomenteNumero(event)" onfocusout="completaData(event)">
+<select class="form-control input-sm" id="txtUfNatural" name="txtUfNatural" onblur="CarregaCidadePorUfNatu()"><option value="">Selecione</option> <option value="AC">AC</option> <option value="AL">AL</option> <option value="AM">AM</option> <option value="AP">AP</option> <option value="BA">BA</option> <option value="CE">CE</option> <option value="DF">DF</option> <option value="ES">ES</option> <option value="EX">EX</option> <option value="GO">GO</option> <option value="MA">MA</option> <option value="MG">MG</option> <option value="MS">MS</option> <option value="MT">MT</option> <option value="PA">PA</option> <option value="PB">PB</option> <option value="PE">PE</option> <option value="PI">PI</option> <option value="PR">PR</option> <option value="RJ">RJ</option> <option value="RN">RN</option> <option value="RO">RO</option> <option value="RR">RR</option> <option value="RS">RS</option> <option value="SC">SC</option> <option value="SE">SE</option> <option value="SP">SP</option> <option value="TO">TO</option> </select>
+<input type="text" id="txtCidadeNatu" name="txtCidadeNatu" class="form-control input-sm ui-autocomplete-input" autocomplete="off">
+<input type="text" id="txtNumeroDependentes" name="txtNumeroDependentes" class="form-control input-sm" maxlength="2" title="" data-toggle="popover" data-trigger="hover" data-content="Nº de Dependentes é obrigatório para pessoa Física" data-placement="right" data-original-title="">
+<select class="form-control input-sm" id="txtPropriedade" name="txtPropriedade" onblur="cadProp.TrataEquiparado()"><option value="">Selecione</option> <option value="1">Da Casa</option> <option value="2">Agregado</option> <option value="3">Terceiro</option> </select>
+<input type="text" id="txtEmail" name="txtEmail" class="form-control input-sm" maxlength="60">
+<input type="text" id="txtTelefone" name="txtTelefone" class="form-control input-sm sp_celphones" placeholder="DDD + TELEFONE" maxlength="14">
+<input type="text" id="txtBanco" name="txtBanco" class="form-control input-sm" onblur="SearchBancoText()" onkeydown="modals('#PesquisaBanco', '#txtPesquisaConteudoBanco', event)" maxlength="3">
+<input type="text" id="txtAgencia" name="txtAgencia" class="form-control input-sm" maxlength="4">
+<input type="text" id="txtDigito" name="txtDigito" class="form-control input-sm" maxlength="1">
+<input type="text" id="txtContaCorrente" name="txtContaCorrente" class="form-control input-sm" maxlength="11">
+<input type="text" id="txtContaCorrenteDigito" name="txtContaCorrenteDigito" class="form-control input-sm" maxlength="1">
+<select id="txtTpConta" name="txtTpConta" class="form-control input-sm"> <option value="1" selected="selected">CC - Conta Corrente</option> <option value="2">CP - Conta Poupança</option> </select>
+<input type="hidden" id="txtProprietarioId" name="txtProprietarioId">
+<div class="modal" id="ModalErro"><b id="erro"><br></b><button type="button" class="btn btn-primary pull-right" data-dismiss="modal" onclick="limpaModal()" id="btnOk">OK</button></div>
+<div class="modal" id="ModalAsk"><b id="pergunta" style="font-size:larger;"></b><input type="button" class="btn btn-primary" data-dismiss="modal" id="btnPerguntaSim" value="SIM"><input type="button" class="btn btn-primary" data-dismiss="modal" id="btnPerguntaNao" value="NÃO"></div>
+</body></html>

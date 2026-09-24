@@ -59,7 +59,7 @@ const PROPRIETARIO = [
   { chave: 'prop_ie', id: 'txtIE', rotulo: 'Inscrição Estadual', tipo: 'texto', max: 16, obrigatorio: true, grupo: 'Documentação (proprietário)', dica: 'ISENTO' },
   { chave: 'prop_rg', id: 'txtRG', rotulo: 'RG', tipo: 'rg', max: 12, obrigatorio: false, grupo: 'Documentação (proprietário)', dica: 'RG do proprietário pessoa física', ia: true },
   { chave: 'prop_org_exp', id: 'txtOrgExp', rotulo: 'Org. Exp.', tipo: 'texto', max: 10, obrigatorio: false, grupo: 'Documentação (proprietário)', dica: 'Órgão emissor do RG do proprietário', ia: true },
-  { chave: 'prop_rntrc', id: 'txtRntrc', rotulo: 'RNTRC', tipo: 'digitos', max: 9, obrigatorio: true, grupo: 'Documentação (proprietário)', dica: 'Número do RNTRC no cartão/certificado da ANTT (8 ou 9 dígitos)', ia: true },
+  { chave: 'prop_rntrc', id: 'txtRntrc', rotulo: 'RNTRC', tipo: 'rntrc', max: 9, obrigatorio: true, grupo: 'Documentação (proprietário)', dica: 'Número do RNTRC no cartão/certificado da ANTT (8 ou 9 dígitos)', ia: true },
   { chave: 'prop_data_emissao_rntrc', id: 'txtDataEmissaoRntrc', rotulo: 'Data Emissão ANTT', tipo: 'data', max: 10, obrigatorio: false, grupo: 'Documentação (proprietário)', dica: 'Data de emissão no cartão da ANTT', ia: true },
   { chave: 'prop_venc_rntrc', id: 'txtVencimentoRntrc', rotulo: 'Vencimento RNTRC', tipo: 'data', max: 10, obrigatorio: true, grupo: 'Documentação (proprietário)', dica: 'Validade no cartão da ANTT', ia: true },
   { chave: 'prop_data_nascimento', id: 'txtDataNascimento', rotulo: 'Data Nascimento', tipo: 'data', max: 10, obrigatorio: false, grupo: 'Documentação (proprietário)', dica: 'igual ao motorista quando é a mesma pessoa' },
