@@ -84,7 +84,7 @@ describe('normalizar', () => {
   });
 
   it('placa antiga e Mercosul em SSS-0A00', () => {
-    expect(formatarPlaca('oum6373')).toBe('OUM-6373');
+    expect(formatarPlaca('xyz9a87')).toBe('XYZ-9A87');
     expect(formatarPlaca('ABC 1D23')).toBe('ABC-1D23');
     expect(formatarPlaca('AB1234')).toBe('');
   });

@@ -1,5 +1,8 @@
 node_modules/
 *.rar
 *.zip
-campos_necessarios/Cadastro De Motoristas*
+campos_necessarios/*.html
+campos_necessarios/*_files/
+/*.PNG
+/*.png
 .superpowers/

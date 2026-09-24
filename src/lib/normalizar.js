@@ -82,8 +82,16 @@ export function formatarCategoria(v) {
 
 export function formatarEmail(v) {
   const s = String(v ?? '').trim().toLowerCase();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : '';
+  return /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(s) ? s : '';
 }
+
+// Texto livre vai para o formulário do Sitra: só letras, números e pontuação comum.
+// Remove < > & # = ; " etc. para que conteúdo hostil nos documentos não vire HTML/script lá.
+const FORA_DO_TEXTO_SEGURO = /[^0-9A-ZÀ-ÖØ-Ý .,'/()ºª-]/g;
+export function textoSeguro(v) {
+  return maiusculas(v).replace(FORA_DO_TEXTO_SEGURO, '').replace(/\s+/g, ' ').trim();
+}
+export const TEM_CARACTERE_SUSPEITO = /[<>&#=;"{}`\\]/;
 
 export function formatarCnpj(v) {
   const d = somenteDigitos(v);
@@ -156,6 +164,6 @@ export function normalizarCampo(campo, valor) {
     case 'chassi': return cortar(maiusculas(valor).replace(/[^0-9A-Z]/g, ''));
     case 'opcao': return formatarOpcao(campo, valor);
     case 'propriedade': return ['1', '2', '3'].includes(String(valor ?? '').trim()) ? String(valor).trim() : '';
-    default: return cortar(maiusculas(valor));
+    default: return cortar(textoSeguro(valor));
   }
 }

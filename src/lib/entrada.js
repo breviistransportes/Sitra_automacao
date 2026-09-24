@@ -3,6 +3,9 @@ import JSZip from 'jszip';
 const TIPOS = { jpg: 'imagem', jpeg: 'imagem', png: 'imagem', pdf: 'pdf', txt: 'texto', zip: 'zip', rar: 'naoSuportado', '7z': 'naoSuportado' };
 const UTEIS = ['imagem', 'pdf', 'texto'];
 const MB = 1024 * 1024;
+const MAX_ARQUIVO = 25 * MB;
+const MAX_ZIP_DESCOMPACTADO = 60 * MB;
+const MAX_ENTRADAS_ZIP = 200;
 
 export function classificar(nome) {
   if (!nome.includes('.')) return 'ignorado';
@@ -18,6 +21,11 @@ export async function lerEntrada(arquivos) {
   };
 
   for (const a of arquivos) {
+    // Limites ANTES de ler/descompactar: um zip de centenas de KB pode abrir gigabytes (zip bomba).
+    if ((a.size ?? 0) > MAX_ARQUIVO) {
+      naoSuportados.push(`${a.name} (grande demais: ${Math.round(a.size / MB)} MB)`);
+      continue;
+    }
     const tipo = classificar(a.name);
     if (tipo !== 'zip') {
       separar(a.name, tipo, UTEIS.includes(tipo) ? new Uint8Array(await a.arrayBuffer()) : null);
@@ -30,8 +38,18 @@ export async function lerEntrada(arquivos) {
       naoSuportados.push(`${a.name} (zip corrompido)`);
       continue;
     }
-    for (const e of Object.values(zip.files)) {
-      if (e.dir || e.name.startsWith('__MACOSX/')) continue;
+    const entradas = Object.values(zip.files).filter(e => !e.dir && !e.name.startsWith('__MACOSX/'));
+    if (entradas.length > MAX_ENTRADAS_ZIP) {
+      naoSuportados.push(`${a.name} (arquivos demais: ${entradas.length})`);
+      continue;
+    }
+    // Tamanho descompactado declarado no próprio zip (lido do diretório, sem descompactar).
+    const descompactado = entradas.reduce((s, e) => s + (e._data?.uncompressedSize ?? 0), 0);
+    if (descompactado > MAX_ZIP_DESCOMPACTADO) {
+      naoSuportados.push(`${a.name} (grande demais para abrir: ${Math.round(descompactado / MB)} MB)`);
+      continue;
+    }
+    for (const e of entradas) {
       const nome = e.name.split('/').pop();
       const t = classificar(nome);
       separar(nome, t, UTEIS.includes(t) ? await e.async('uint8array') : null);

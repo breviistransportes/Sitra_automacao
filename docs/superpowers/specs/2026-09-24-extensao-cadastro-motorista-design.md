@@ -205,3 +205,7 @@ veículo = CRV/CRLV (inclui o tipo do veículo); motorista ganha o campo Placa (
 responde a pergunta, não salva). Existente: proprietário → `txtProprietarioId` preenchido; veículo →
 `txtStatusVeiculo` preenchido → parar. Placa: máscara `SSS-0A00` (8 caracteres). CPF/CNPJ: 14 ou 18 caracteres.
 Cidade de registro do veículo é `<select>` carregado após a UF (valores em MAIÚSCULAS).
+
+## 12. Segurança (v0.3.0, 2026-09-24)
+
+Correções da avaliação do security-tester: texto livre com allowlist (sem `< > & # = ;`), aviso e "conferir" para caracteres suspeitos; campos críticos lidos de texto/mensagem sempre "conferir"; telefone/e-mail só se estiverem literalmente no texto das mensagens/conversas; instrução ao modelo para tratar conteúdo como dado; nomes de arquivo saneados no prompt; limites antes de ler/descompactar (25 MB por arquivo, 60 MB descompactado, 200 entradas por zip); injeção só em `https://2323.aleff.com.br` e só com os campos da tela aberta; link de atualização validado (repositório e tag vX.Y.Z).

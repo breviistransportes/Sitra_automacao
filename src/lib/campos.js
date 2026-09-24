@@ -114,4 +114,19 @@ export const CAMPOS = [...MOTORISTA, ...PROPRIETARIO, ...VEICULO];
 
 export const camposDaTela = (tela) => CAMPOS.filter(c => c.tela === tela);
 
+// Só o Sitra da empresa (o Sitra é multiempresa por subdomínio). Igual ao host_permissions do manifest.
+export const HOST_SITRA = '2323.aleff.com.br';
+export function ehSitra(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && u.hostname === HOST_SITRA;
+  } catch {
+    return false;
+  }
+}
+
+// Só os dados da tela aberta vão para a página (a página não precisa ver os das outras telas).
+export const valoresDaTela = (valores, tela) =>
+  Object.fromEntries(Object.entries(valores).filter(([chave]) => CAMPO_POR_CHAVE[chave]?.tela === tela));
+
 export const CAMPO_POR_CHAVE = Object.fromEntries(CAMPOS.map(c => [c.chave, c]));

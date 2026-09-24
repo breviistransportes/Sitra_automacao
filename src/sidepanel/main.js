@@ -3,8 +3,8 @@ import { redimensionarImagem } from '../lib/imagem.js';
 import { chamarGemini, posProcessar } from '../lib/extrator.js';
 import { lerConfig, salvarConfig } from '../lib/config.js';
 import { montarFormulario, lerFormulario, mostrarAba } from './formulario.js';
-import { versaoMaior } from '../lib/versao.js';
-import { TELAS, CAMPO_POR_CHAVE } from '../lib/campos.js';
+import { versaoMaior, linkAtualizacaoValido } from '../lib/versao.js';
+import { TELAS, CAMPO_POR_CHAVE, ehSitra, valoresDaTela } from '../lib/campos.js';
 
 // Documento que identifica o cadastro em cada tela do Sitra.
 const DOCUMENTO = { motorista: 'cpf', proprietario: 'prop_cpf_cnpj', veiculo: 'veic_placa' };
@@ -77,7 +77,9 @@ async function lerDocumentos() {
     if (!temConteudo(docs, docs.mensagens)) {
       throw new Error(['Nenhuma foto/PDF encontrada e nenhuma mensagem colada.', ...avisosEntrada].join(' '));
     }
-    const r = posProcessar(await chamarGemini(cfg.apiKey, docs), cfg.padroes);
+    // Telefone/e-mail só são aceitos se estiverem escritos nas mensagens/conversas enviadas.
+    const textoConfiavel = [docs.mensagens ?? '', ...docs.textos.map(t => t.conteudo)].join('\n');
+    const r = posProcessar(await chamarGemini(cfg.apiKey, docs), cfg.padroes, { textoConfiavel });
     $('form-conferencia').innerHTML = montarFormulario(r.valores);
     const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(', ')}`] : [];
     preencherLista($('avisos'), [...docsLidos, ...avisosEntrada, ...r.avisos]);
@@ -92,6 +94,8 @@ async function lerDocumentos() {
 
 async function executarNoSitra(func, args = []) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  // Só injeta no Sitra da empresa (host_permissions já restringe; conferimos a URL antes).
+  if (!ehSitra(tab?.url)) throw new Error('A aba ativa não é o Sitra da empresa.');
   await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', files: ['content/injetado.bundle.js'] });
   const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', func, args });
   return r.result;
@@ -139,7 +143,7 @@ async function preencherSitra() {
   $('btn-preencher').disabled = true;
   $('btn-preencher').textContent = 'Preenchendo…';
   try {
-    mostrarRelatorio(await executarNoSitra((v) => window.__cadastroMotorista.preencher(v), [valores]));
+    mostrarRelatorio(await executarNoSitra((v) => window.__cadastroMotorista.preencher(v), [valoresDaTela(valores, est.tela)]));
   } catch (e) {
     mensagem(`Falha ao preencher: ${e.message}`);
   } finally {
@@ -183,7 +187,7 @@ async function verificarAtualizacao() {
     const r = await fetch('https://api.github.com/repos/breviistransportes/Sitra_automacao/releases/latest');
     if (!r.ok) return;
     const { tag_name: tag, html_url: url } = await r.json();
-    if (!versaoMaior(tag, chrome.runtime.getManifest().version)) return;
+    if (!linkAtualizacaoValido(tag, url) || !versaoMaior(tag, chrome.runtime.getManifest().version)) return;
     $('link-atualizacao').href = url;
     $('link-atualizacao').textContent = `Nova versão ${tag} disponível — baixar`;
     $('atualizacao').hidden = false;

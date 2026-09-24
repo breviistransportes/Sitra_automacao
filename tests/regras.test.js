@@ -67,11 +67,11 @@ describe('aplicarRegras', () => {
   });
 
   it('veículo: proprietário, vencimentos amanhã (o Sitra recusa hoje), placa no motorista', () => {
-    const r = aplicarRegras(valores({ prop_cpf_cnpj: '11.222.333/0001-81', veic_placa: 'OUM-6373' }), { hoje: HOJE });
+    const r = aplicarRegras(valores({ prop_cpf_cnpj: '11.222.333/0001-81', veic_placa: 'XYZ-9A87' }), { hoje: HOJE });
     expect(r.veic_cpf_cnpj_prop.valor).toBe('11.222.333/0001-81');
     expect(r.veic_venc_licenciamento.valor).toBe('25/09/2026');
     expect(r.veic_venc_ipva.valor).toBe('25/09/2026');
-    expect(r.placa.valor).toBe('OUM-6373');
+    expect(r.placa.valor).toBe('XYZ-9A87');
   });
 
   it('amanhã vira o mês e o ano', () => {

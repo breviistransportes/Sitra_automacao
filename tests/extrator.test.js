@@ -79,7 +79,7 @@ describe('v2: proprietário e veículo', () => {
         cpf: { valor: '52998224725', certeza: 'alta', fonte: 'CNH' },
         prop_cpf_cnpj: { valor: '11222333000181', certeza: 'alta', fonte: 'CRV.pdf' },
         veic_tipo: { valor: 'Cavalo', certeza: 'conferir', fonte: 'CRV.pdf' },
-        veic_placa: { valor: 'oum6373', certeza: 'alta', fonte: 'CRV.pdf' },
+        veic_placa: { valor: 'xyz9a87', certeza: 'alta', fonte: 'CRV.pdf' },
       },
       documentos_encontrados: [], avisos: [],
     }, padroes, { hoje: new Date(2026, 8, 24) });
@@ -89,7 +89,7 @@ describe('v2: proprietário e veículo', () => {
     expect(r.valores.prop_propriedade.valor).toBe('3');
     expect(r.valores.veic_tipo_propriedade.valor).toBe('3');
     expect(r.valores.veic_venc_ipva.valor).toBe('25/09/2026');
-    expect(r.valores.placa.valor).toBe('OUM-6373');
+    expect(r.valores.placa.valor).toBe('XYZ-9A87');
   });
 
   it('CNPJ do proprietário inválido vira "conferir" com aviso', () => {

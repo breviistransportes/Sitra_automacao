@@ -54,3 +54,18 @@ Precisa de [Node.js](https://nodejs.org) 20+: `npm install`, depois:
 
 Os computadores com a extensão passam a ver o aviso "Nova versão disponível".
 **Não** use o botão verde "Code → Download ZIP" para instalar: ele traz o código-fonte, sem a extensão montada.
+
+## Segurança e LGPD
+
+- **Chave do Gemini:** use uma chave exclusiva da extensão, em projeto **com cobrança ativada**, restrita à
+  "Generative Language API" (Google Cloud Console → Credenciais) e com limite de gasto. Troque a chave se o
+  computador for compartilhado ou se ela vazar.
+- **Conteúdo dos documentos não é confiável:** a extensão remove caracteres de HTML/script dos campos de texto,
+  mantém em amarelo campos críticos lidos de texto/mensagem, só aceita telefone/e-mail que estejam escritos nas
+  mensagens e recusa `.zip`/arquivos grandes demais. **Sempre confira** a conferência e a tela do Sitra antes de cadastrar.
+- **Escopo:** a extensão só injeta no Sitra da empresa (`https://2323.aleff.com.br`) e envia para a página apenas
+  os campos da tela aberta.
+- **LGPD:** CNH, CPF, endereço e mensagens dos motoristas são enviados ao Google (Gemini) para leitura. Registre essa
+  finalidade, a base legal e o Google como operador no registro de tratamento da empresa e informe os motoristas.
+- **GitHub:** ative a verificação em 2 etapas na conta `breviistransportes` — o aviso de atualização aponta para os
+  Releases deste repositório.
