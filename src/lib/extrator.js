@@ -31,8 +31,9 @@ Outros documentos:
 - CRV/CRLV é documento do veículo: não use para os dados pessoais do motorista.
 
 Proprietário (campos prop_*):
-- É o PROPRIETÁRIO que aparece no CRV/CRLV (nome e CPF ou CNPJ). Pode ser o próprio motorista, outra pessoa ou uma empresa.
-- RNTRC, data de emissão e validade vêm do cartão/certificado da ANTT (RNTRC com 8 ou 9 dígitos).
+- O proprietário é o transportador do cartão/certificado da ANTT (RNTRC): nome/razão social, CPF ou CNPJ, RNTRC, data de emissão e validade (RNTRC com 8 ou 9 dígitos). Pode ser o próprio motorista, outra pessoa ou uma empresa.
+- Se o cartão da ANTT e o CRV/CRLV mostrarem proprietários diferentes, a ANTT prevalece: use os dados da ANTT e registre a divergência em avisos.
+- Só use o PROPRIETÁRIO do CRV/CRLV (nome e CPF/CNPJ) se não houver cartão da ANTT.
 - prop_rg / prop_org_exp: só se houver documento de identidade do proprietário.
 
 Veículo (campos veic_*), do CRV/CRLV:

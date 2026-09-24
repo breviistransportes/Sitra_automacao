@@ -46,8 +46,8 @@ const MOTORISTA = [
 
 // Endereço, IE, dependentes e CIOT vêm de regras (spec §11); a IA lê só o que está nos documentos.
 const PROPRIETARIO = [
-  { chave: 'prop_cpf_cnpj', id: 'txtProprietarioCpfCnpj', rotulo: 'CPF/CNPJ', tipo: 'cpf_cnpj', max: 18, obrigatorio: true, grupo: 'Proprietário', dica: 'CPF ou CNPJ do proprietário do veículo (campo PROPRIETÁRIO / CPF-CNPJ do CRV ou CRLV)', ia: true },
-  { chave: 'prop_nome', id: 'txtNomeProprietario', rotulo: 'Nome', tipo: 'texto', max: 50, obrigatorio: true, grupo: 'Proprietário', dica: 'Nome ou razão social do proprietário do veículo (CRV/CRLV)', ia: true },
+  { chave: 'prop_cpf_cnpj', id: 'txtProprietarioCpfCnpj', rotulo: 'CPF/CNPJ', tipo: 'cpf_cnpj', max: 18, obrigatorio: true, grupo: 'Proprietário', dica: 'CPF ou CNPJ do transportador no cartão da ANTT (se não houver, o PROPRIETÁRIO do CRV/CRLV)', ia: true },
+  { chave: 'prop_nome', id: 'txtNomeProprietario', rotulo: 'Nome', tipo: 'texto', max: 50, obrigatorio: true, grupo: 'Proprietário', dica: 'Nome ou razão social do transportador no cartão da ANTT (se não houver, o PROPRIETÁRIO do CRV/CRLV)', ia: true },
   { chave: 'prop_cep', id: 'txtCep', rotulo: 'CEP', tipo: 'cep', max: 9, obrigatorio: true, grupo: 'Proprietário', dica: 'igual ao do motorista' },
   { chave: 'prop_endereco', id: 'txtEndereco', rotulo: 'Endereço', tipo: 'texto', max: 50, obrigatorio: true, grupo: 'Proprietário', dica: 'igual ao do motorista' },
   { chave: 'prop_numero', id: 'txtNumero', rotulo: 'Número', tipo: 'texto', max: 10, obrigatorio: true, grupo: 'Proprietário', dica: 'igual ao do motorista' },

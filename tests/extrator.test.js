@@ -60,6 +60,13 @@ describe('v2: proprietário e veículo', () => {
     expect(s.properties.campos.properties.veic_tipo.properties.valor.enum).toContain('');
   });
 
+  it('proprietário vem do cartão ANTT; CRV/CRLV só se não houver ANTT', () => {
+    expect(INSTRUCOES).toMatch(/proprietário.*cartão.*ANTT/i);
+    expect(INSTRUCOES).toMatch(/ANTT prevalece/i);
+    expect(CAMPOS_IA.find(c => c.chave === 'prop_cpf_cnpj').dica).toMatch(/ANTT/);
+    expect(CAMPOS_IA.find(c => c.chave === 'prop_nome').dica).toMatch(/ANTT/);
+  });
+
   it('instruções cobrem CRV/CRLV e cartão ANTT', () => {
     expect(INSTRUCOES).toContain('CRV');
     expect(INSTRUCOES).toContain('ANTT');
