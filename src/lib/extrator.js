@@ -45,7 +45,7 @@ Veículo (campos veic_*), do CRV/CRLV:
   SEMI-REBOQUE/REBOQUE → "Carreta" (ou Carreta6/7/9 conforme os eixos, se claro); caminhão de 3 eixos → "Truck";
   caminhão de 2 eixos → "Toco"; menores (3/4, VUC, HR, VAN, Fiorino…) pelo modelo. Na dúvida, certeza "conferir".
 - veic_combustivel: escolha a opção do Sitra que corresponde ao COMBUSTÍVEL.
-- celular, fone_residencial e email: da conversa (inclusive o número de quem enviou, se aparecer no cabeçalho das mensagens) ou de documentos. Telefones com DDD.
+- Telefones e e-mails (celular, fone_residencial, email, prop_telefone, prop_email): só das mensagens coladas pelo operador ou da conversa do WhatsApp (inclusive o número de quem enviou, se aparecer no cabeçalho das mensagens). NUNCA de documentos: contas, cartão da ANTT e CRLV trazem telefones e e-mails de empresas. Telefones com DDD.
 - estado_civil e nacionalidade: só se estiverem escritos em algum documento ou na conversa.
 
 Mensagens do motorista (texto colado pelo operador, se houver):
@@ -147,6 +147,10 @@ export async function chamarGemini(apiKey, docs, fetchFn = fetch) {
   }
 }
 
+// Telefone/e-mail só valem das mensagens/conversa: documentos trazem contatos de empresas (SAC, 0800).
+const CONTATOS = ['celular', 'fone_residencial', 'email', 'prop_telefone', 'prop_email'];
+const DE_DOCUMENTO = /.(pdf|jpe?g|png)$/i;
+
 export function posProcessar(bruto, padroes, { hoje = new Date() } = {}) {
   const valores = {};
   const avisos = [...(bruto?.avisos ?? [])];
@@ -156,6 +160,11 @@ export function posProcessar(bruto, padroes, { hoje = new Date() } = {}) {
     let certeza = b?.certeza === 'alta' ? 'alta' : 'conferir';
     let fonte = b?.fonte ?? '';
     const nome = campo.tela === 'motorista' ? campo.rotulo : `${TELAS[campo.tela].rotulo} — ${campo.rotulo}`;
+    if (CONTATOS.includes(campo.chave) && b?.valor && DE_DOCUMENTO.test(fonte.trim())) {
+      avisos.push(`${nome}: ignorado "${b.valor}" de ${fonte} — telefone e e-mail só valem das mensagens`);
+      valores[campo.chave] = { valor: '', certeza: 'conferir', fonte: '' };
+      continue;
+    }
     if (b?.valor && !valor) avisos.push(`${nome}: valor lido "${b.valor}" não está num formato válido`);
     if (!valor && campo.padrao && padroes?.[campo.padrao]) {
       valor = normalizarCampo(campo, padroes[campo.padrao]);

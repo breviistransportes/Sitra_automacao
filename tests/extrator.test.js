@@ -99,6 +99,38 @@ describe('v2: proprietário e veículo', () => {
   });
 });
 
+describe('telefone e e-mail só das mensagens', () => {
+  const padroes = { propriedade: '3', nacionalidade: 'BRASILEIRA' };
+  const bruto = (campos) => ({ campos, documentos_encontrados: [], avisos: [] });
+
+  it('instruções proíbem telefone/e-mail de documentos', () => {
+    expect(INSTRUCOES).toMatch(/telefones? e e-mails?[^.]*só das mensagens/i);
+  });
+
+  it('descarta telefone/e-mail que vieram de foto ou PDF, com aviso', () => {
+    const r = posProcessar(bruto({
+      celular: { valor: '(31) 3333-0800', certeza: 'alta', fonte: 'conta_luz.jpg' },
+      email: { valor: 'sac@cemig.com.br', certeza: 'alta', fonte: 'Conta Luz.PDF' },
+      prop_telefone: { valor: '0800 610 300', certeza: 'alta', fonte: 'ANTT.pdf' },
+    }), padroes);
+    expect(r.valores.celular).toEqual({ valor: '', certeza: 'conferir', fonte: '' });
+    expect(r.valores.email.valor).toBe('');
+    expect(r.valores.prop_telefone.valor).toBe('');
+    expect(r.avisos).toContain('Celular: ignorado "(31) 3333-0800" de conta_luz.jpg — telefone e e-mail só valem das mensagens');
+  });
+
+  it('mantém os que vieram das mensagens ou da conversa, e o proprietário copia o do motorista', () => {
+    const r = posProcessar(bruto({
+      celular: { valor: '31 99876-5432', certeza: 'alta', fonte: 'mensagem' },
+      email: { valor: 'carlos@exemplo.com', certeza: 'alta', fonte: '_chat.txt' },
+      prop_telefone: { valor: '0800 610 300', certeza: 'alta', fonte: 'ANTT.pdf' },
+    }), padroes);
+    expect(r.valores.celular.valor).toBe('(31)99876-5432');
+    expect(r.valores.email.valor).toBe('carlos@exemplo.com');
+    expect(r.valores.prop_telefone).toEqual({ valor: '(31)99876-5432', certeza: 'alta', fonte: 'motorista' });
+  });
+});
+
 describe('mensagens coladas pelo operador', () => {
   it('entram como texto antes do pedido final', () => {
     const p = montarPartes({ ...DOCS, mensagens: '  meu cel é 31 98888-7777, sou casado  ' });
