@@ -35,7 +35,7 @@ const MOTORISTA = [
   { chave: 'uf_exp', id: 'txtUfExp', rotulo: 'UF Exp.', tipo: 'uf', obrigatorio: false, grupo: 'Documentação', dica: 'UF do órgão emissor do RG' },
   { chave: 'org_exp', id: 'txtOrgExp', rotulo: 'Org. Exp.', tipo: 'texto', max: 10, obrigatorio: true, grupo: 'Documentação', dica: 'Órgão emissor do RG (ex.: SSP)' },
   { chave: 'data_expedicao_rg', id: 'txtDataExpedicao', rotulo: 'Data Expedição (RG)', tipo: 'data', max: 10, obrigatorio: true, grupo: 'Documentação', dica: 'Data de expedição do RG — só existe no próprio RG' },
-  { chave: 'registro_cnh', id: 'txtNumeroCnh', rotulo: 'Nº Registro CNH', tipo: 'digitos', max: 14, obrigatorio: true, grupo: 'Documentação', dica: 'Nº REGISTRO da CNH (11 dígitos)' },
+  { chave: 'registro_cnh', id: 'txtNumeroCnh', rotulo: 'Nº Registro CNH', tipo: 'registro_cnh', max: 14, obrigatorio: true, grupo: 'Documentação', dica: 'Nº REGISTRO da CNH (11 dígitos)' },
   { chave: 'numero_espelho_cnh', id: 'txtRegistroCNH', rotulo: 'Nº CNH (espelho)', tipo: 'digitos', max: 10, obrigatorio: false, grupo: 'Documentação', dica: 'Número do espelho da CNH (diferente do registro), se visível' },
   { chave: 'data_primeira_cnh', id: 'txtDataPrimeiraCnh', rotulo: 'Data Primeira CNH', tipo: 'data', max: 10, obrigatorio: true, grupo: 'Documentação', dica: '1ª HABILITAÇÃO' },
   { chave: 'data_emissao_cnh', id: 'txtDataEmissaoCnh', rotulo: 'Data Emissão CNH', tipo: 'data', max: 10, obrigatorio: false, grupo: 'Documentação', dica: 'DATA EMISSÃO da CNH' },

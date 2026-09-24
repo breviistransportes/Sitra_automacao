@@ -2576,7 +2576,7 @@ var MOTORISTA = [
   { chave: "uf_exp", id: "txtUfExp", rotulo: "UF Exp.", tipo: "uf", obrigatorio: false, grupo: "Documenta\xE7\xE3o", dica: "UF do \xF3rg\xE3o emissor do RG" },
   { chave: "org_exp", id: "txtOrgExp", rotulo: "Org. Exp.", tipo: "texto", max: 10, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "\xD3rg\xE3o emissor do RG (ex.: SSP)" },
   { chave: "data_expedicao_rg", id: "txtDataExpedicao", rotulo: "Data Expedi\xE7\xE3o (RG)", tipo: "data", max: 10, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "Data de expedi\xE7\xE3o do RG \u2014 s\xF3 existe no pr\xF3prio RG" },
-  { chave: "registro_cnh", id: "txtNumeroCnh", rotulo: "N\xBA Registro CNH", tipo: "digitos", max: 14, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "N\xBA REGISTRO da CNH (11 d\xEDgitos)" },
+  { chave: "registro_cnh", id: "txtNumeroCnh", rotulo: "N\xBA Registro CNH", tipo: "registro_cnh", max: 14, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "N\xBA REGISTRO da CNH (11 d\xEDgitos)" },
   { chave: "numero_espelho_cnh", id: "txtRegistroCNH", rotulo: "N\xBA CNH (espelho)", tipo: "digitos", max: 10, obrigatorio: false, grupo: "Documenta\xE7\xE3o", dica: "N\xFAmero do espelho da CNH (diferente do registro), se vis\xEDvel" },
   { chave: "data_primeira_cnh", id: "txtDataPrimeiraCnh", rotulo: "Data Primeira CNH", tipo: "data", max: 10, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "1\xAA HABILITA\xC7\xC3O" },
   { chave: "data_emissao_cnh", id: "txtDataEmissaoCnh", rotulo: "Data Emiss\xE3o CNH", tipo: "data", max: 10, obrigatorio: false, grupo: "Documenta\xE7\xE3o", dica: "DATA EMISS\xC3O da CNH" },
@@ -2827,6 +2827,11 @@ function normalizarCampo(campo, valor) {
       return cortar(formatarEmail(valor));
     case "digitos":
       return cortar(somenteDigitos(valor));
+    case "registro_cnh": {
+      const d = somenteDigitos(valor);
+      return d.length === 11 ? d : "";
+    }
+    // Nº REGISTRO: 11 dígitos
     case "rntrc":
       return somenteDigitos(valor).slice(-9);
     // o Sitra pede os 9 últimos dígitos
@@ -2923,7 +2928,7 @@ Regras gerais:
 - Datas sempre no formato DD/MM/AAAA.
 
 CNH / CNH-e:
-- "N\xBA REGISTRO" (11 d\xEDgitos) \u2192 registro_cnh. O n\xFAmero do espelho (impresso na lateral ou no verso, diferente do registro) \u2192 numero_espelho_cnh.
+- registro_cnh = o n\xFAmero do campo "N\xBA REGISTRO" da CNH: exatamente 11 d\xEDgitos, muitas vezes come\xE7a com 0. A CNH tem outros n\xFAmeros parecidos que N\xC3O s\xE3o o registro: o CPF; o n\xFAmero do espelho (numera\xE7\xE3o impressa na vertical/lateral ou no verso, 9 a 11 d\xEDgitos) \u2192 numero_espelho_cnh; o c\xF3digo RENACH (come\xE7a com a sigla da UF, ex.: MG123456789); c\xF3digos de seguran\xE7a/valida\xE7\xE3o, QR code e n\xFAmero do formul\xE1rio. Na d\xFAvida, registro_cnh fica "".
 - "1\xAA HABILITA\xC7\xC3O" \u2192 data_primeira_cnh. "DATA EMISS\xC3O" \u2192 data_emissao_cnh. "VALIDADE" \u2192 data_validade_cnh. "CAT. HAB." \u2192 categoria_cnh.
 - "FILIA\xC7\xC3O" traz os nomes dos pais, um embaixo do outro: o primeiro nome \xE9 o do PAI \u2192 nome_pai; o segundo \xE9 o da M\xC3E \u2192 nome_mae. Cada nome completo pode ocupar mais de uma linha. Preencha s\xF3 os nomes que estiverem escritos: se houver um s\xF3 nome, \xE9 o da m\xE3e e nome_pai fica ""; se n\xE3o houver filia\xE7\xE3o leg\xEDvel, nome_pai e nome_mae ficam "". Nunca invente o nome do pai ou da m\xE3e.
 - "DATA, LOCAL E UF DE NASCIMENTO" \u2192 data_nascimento, naturalidade (cidade) e uf_naturalidade.
@@ -3045,7 +3050,7 @@ var CONTATOS = ["celular", "fone_residencial", "email", "prop_telefone", "prop_e
 var DE_DOCUMENTO = /\.(pdf|jpe?g|png)$/i;
 var nomeSeguro = (n) => String(n ?? "").replace(/[^A-Za-z0-9À-ÿ ._()-]/g, "").replace(/\s+/g, " ").trim().slice(0, 50);
 var CRITICOS = ["cpf", "nome", "registro_cnh", "prop_cpf_cnpj", "prop_nome", "prop_rntrc", "veic_placa", "veic_chassi", "veic_renavam"];
-var SEMPRE_CONFERIR = ["nome_pai", "nome_mae"];
+var SEMPRE_CONFERIR = ["nome_pai", "nome_mae", "registro_cnh"];
 var DE_TEXTO = /^(mensage[mn]s?|conversa)$|\.txt$/i;
 function contatoNoTexto(campo, valor, texto) {
   if (campo.tipo === "email") return texto.toLowerCase().includes(valor);
@@ -3095,6 +3100,12 @@ function posProcessar(bruto, padroes, { hoje = /* @__PURE__ */ new Date(), texto
   if (valores.cpf.valor && !cpfValido(valores.cpf.valor)) {
     valores.cpf.certeza = "conferir";
     avisos.push("CPF lido n\xE3o passa na valida\xE7\xE3o \u2014 confira");
+  }
+  const registro = valores.registro_cnh.valor;
+  const confundido = registro && (registro === somenteDigitos(valores.cpf.valor) ? "o CPF" : registro === somenteDigitos(bruto?.campos?.numero_espelho_cnh?.valor) ? "o n\xFAmero do espelho" : null);
+  if (confundido) {
+    avisos.push(`N\xBA Registro CNH: ignorado "${registro}" \u2014 \xE9 igual a ${confundido}; confira na CNH`);
+    valores.registro_cnh = { valor: "", certeza: "conferir", fonte: "" };
   }
   if (valores.prop_cpf_cnpj.valor && !cpfCnpjValido(valores.prop_cpf_cnpj.valor)) {
     valores.prop_cpf_cnpj.certeza = "conferir";

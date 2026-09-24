@@ -148,6 +148,36 @@ describe('a IA não pode inventar', () => {
   });
 });
 
+describe('Nº de Registro da CNH', () => {
+  const pp = (campos) => posProcessar({ campos, documentos_encontrados: [], avisos: [] }, { propriedade: '3', nacionalidade: 'BRASILEIRA' });
+  const c = (valor) => ({ valor, certeza: 'alta', fonte: 'CNH-e.pdf' });
+
+  it('precisa ter 11 dígitos', () => {
+    const r = pp({ registro_cnh: c('123456789') });
+    expect(r.valores.registro_cnh.valor).toBe('');
+    expect(r.avisos.join(' ')).toMatch(/Nº Registro CNH: valor lido "123456789"/);
+  });
+
+  it('não pode ser o CPF nem o número do espelho', () => {
+    const r = pp({ cpf: c('52998224725'), registro_cnh: c('52998224725') });
+    expect(r.valores.registro_cnh.valor).toBe('');
+    expect(r.avisos.join(' ')).toMatch(/Nº Registro CNH.*CPF/);
+    const r2 = pp({ numero_espelho_cnh: c('01234567890'), registro_cnh: c('01234567890') });
+    expect(r2.valores.registro_cnh.valor).toBe('');
+  });
+
+  it('válido fica, mas sempre em amarelo', () => {
+    const r = pp({ cpf: c('52998224725'), registro_cnh: c('01234567890') });
+    expect(r.valores.registro_cnh).toEqual({ valor: '01234567890', certeza: 'conferir', fonte: 'CNH-e.pdf' });
+  });
+
+  it('instruções distinguem o registro dos outros números da CNH', () => {
+    expect(INSTRUCOES).toMatch(/registro_cnh.*11 dígitos/);
+    expect(INSTRUCOES).toMatch(/RENACH/);
+    expect(INSTRUCOES).toMatch(/espelho/);
+  });
+});
+
 describe('filiação e datas da CNH', () => {
   it('instruções: filiação tem pai e mãe; expedição do RG = emissão da CNH', () => {
     expect(INSTRUCOES).toMatch(/FILIAÇÃO.*primeiro nome.*nome_pai/);

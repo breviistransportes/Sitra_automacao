@@ -157,6 +157,7 @@ export function normalizarCampo(campo, valor) {
     case 'categoria': return formatarCategoria(valor);
     case 'email': return cortar(formatarEmail(valor));
     case 'digitos': return cortar(somenteDigitos(valor));
+    case 'registro_cnh': { const d = somenteDigitos(valor); return d.length === 11 ? d : ''; } // Nº REGISTRO: 11 dígitos
     case 'rntrc': return somenteDigitos(valor).slice(-9); // o Sitra pede os 9 últimos dígitos
     case 'cpf_cnpj': return formatarCpfCnpj(valor);
     case 'placa': return formatarPlaca(valor);

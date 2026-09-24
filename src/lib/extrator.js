@@ -21,7 +21,7 @@ Regras gerais:
 - Datas sempre no formato DD/MM/AAAA.
 
 CNH / CNH-e:
-- "Nº REGISTRO" (11 dígitos) → registro_cnh. O número do espelho (impresso na lateral ou no verso, diferente do registro) → numero_espelho_cnh.
+- registro_cnh = o número do campo "Nº REGISTRO" da CNH: exatamente 11 dígitos, muitas vezes começa com 0. A CNH tem outros números parecidos que NÃO são o registro: o CPF; o número do espelho (numeração impressa na vertical/lateral ou no verso, 9 a 11 dígitos) → numero_espelho_cnh; o código RENACH (começa com a sigla da UF, ex.: MG123456789); códigos de segurança/validação, QR code e número do formulário. Na dúvida, registro_cnh fica "".
 - "1ª HABILITAÇÃO" → data_primeira_cnh. "DATA EMISSÃO" → data_emissao_cnh. "VALIDADE" → data_validade_cnh. "CAT. HAB." → categoria_cnh.
 - "FILIAÇÃO" traz os nomes dos pais, um embaixo do outro: o primeiro nome é o do PAI → nome_pai; o segundo é o da MÃE → nome_mae. Cada nome completo pode ocupar mais de uma linha. Preencha só os nomes que estiverem escritos: se houver um só nome, é o da mãe e nome_pai fica ""; se não houver filiação legível, nome_pai e nome_mae ficam "". Nunca invente o nome do pai ou da mãe.
 - "DATA, LOCAL E UF DE NASCIMENTO" → data_nascimento, naturalidade (cidade) e uf_naturalidade.
@@ -157,7 +157,7 @@ export const nomeSeguro = (n) => String(n ?? '').replace(/[^A-Za-z0-9À-ÿ ._()-
 
 // Campos que um texto hostil (mensagem, .txt) mais se beneficiaria de forjar: nunca saem com certeza alta de texto.
 const CRITICOS = ['cpf', 'nome', 'registro_cnh', 'prop_cpf_cnpj', 'prop_nome', 'prop_rntrc', 'veic_placa', 'veic_chassi', 'veic_renavam'];
-const SEMPRE_CONFERIR = ['nome_pai', 'nome_mae'];
+const SEMPRE_CONFERIR = ['nome_pai', 'nome_mae', 'registro_cnh'];
 const DE_TEXTO =/^(mensage[mn]s?|conversa)$|\.txt$/i;
 
 // O contato precisa estar escrito nas mensagens/conversa — checado aqui, não pela "fonte" que o modelo declara.
@@ -206,6 +206,13 @@ export function posProcessar(bruto, padroes, { hoje = new Date(), textoConfiavel
   if (valores.cpf.valor && !cpfValido(valores.cpf.valor)) {
     valores.cpf.certeza = 'conferir';
     avisos.push('CPF lido não passa na validação — confira');
+  }
+  // Nº Registro da CNH confundido com outro número do documento.
+  const registro = valores.registro_cnh.valor;
+  const confundido = registro && (registro === somenteDigitos(valores.cpf.valor) ? 'o CPF' : registro === somenteDigitos(bruto?.campos?.numero_espelho_cnh?.valor) ? 'o número do espelho' : null);
+  if (confundido) {
+    avisos.push(`Nº Registro CNH: ignorado "${registro}" — é igual a ${confundido}; confira na CNH`);
+    valores.registro_cnh = { valor: '', certeza: 'conferir', fonte: '' };
   }
   if (valores.prop_cpf_cnpj.valor && !cpfCnpjValido(valores.prop_cpf_cnpj.valor)) {
     valores.prop_cpf_cnpj.certeza = 'conferir';

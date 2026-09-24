@@ -25,7 +25,7 @@
     { chave: "uf_exp", id: "txtUfExp", rotulo: "UF Exp.", tipo: "uf", obrigatorio: false, grupo: "Documenta\xE7\xE3o", dica: "UF do \xF3rg\xE3o emissor do RG" },
     { chave: "org_exp", id: "txtOrgExp", rotulo: "Org. Exp.", tipo: "texto", max: 10, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "\xD3rg\xE3o emissor do RG (ex.: SSP)" },
     { chave: "data_expedicao_rg", id: "txtDataExpedicao", rotulo: "Data Expedi\xE7\xE3o (RG)", tipo: "data", max: 10, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "Data de expedi\xE7\xE3o do RG \u2014 s\xF3 existe no pr\xF3prio RG" },
-    { chave: "registro_cnh", id: "txtNumeroCnh", rotulo: "N\xBA Registro CNH", tipo: "digitos", max: 14, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "N\xBA REGISTRO da CNH (11 d\xEDgitos)" },
+    { chave: "registro_cnh", id: "txtNumeroCnh", rotulo: "N\xBA Registro CNH", tipo: "registro_cnh", max: 14, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "N\xBA REGISTRO da CNH (11 d\xEDgitos)" },
     { chave: "numero_espelho_cnh", id: "txtRegistroCNH", rotulo: "N\xBA CNH (espelho)", tipo: "digitos", max: 10, obrigatorio: false, grupo: "Documenta\xE7\xE3o", dica: "N\xFAmero do espelho da CNH (diferente do registro), se vis\xEDvel" },
     { chave: "data_primeira_cnh", id: "txtDataPrimeiraCnh", rotulo: "Data Primeira CNH", tipo: "data", max: 10, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "1\xAA HABILITA\xC7\xC3O" },
     { chave: "data_emissao_cnh", id: "txtDataEmissaoCnh", rotulo: "Data Emiss\xE3o CNH", tipo: "data", max: 10, obrigatorio: false, grupo: "Documenta\xE7\xE3o", dica: "DATA EMISS\xC3O da CNH" },
