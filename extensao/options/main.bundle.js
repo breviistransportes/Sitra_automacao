@@ -1,5 +1,5 @@
 // src/lib/config.js
-var PADROES = { propriedade: "3", nacionalidade: "BRASILEIRA" };
+var PADROES = { propriedade: "3", nacionalidade: "BRASILEIRA", emailProprietario: "comercial2@breviis.com.br", telefoneProprietario: "" };
 async function lerConfig(storage = chrome.storage.local) {
   const r = await storage.get(["apiKey", "padroes"]);
   return { apiKey: r.apiKey ?? "", padroes: { ...PADROES, ...r.padroes ?? {} } };

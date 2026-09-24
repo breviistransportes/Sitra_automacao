@@ -217,6 +217,8 @@ async function abrirConfig(aviso = '') {
   $('cfg-apiKey').value = cfg.apiKey;
   $('cfg-nacionalidade').value = cfg.padroes.nacionalidade;
   $('cfg-propriedade').value = cfg.padroes.propriedade;
+  $('cfg-emailProprietario').value = cfg.padroes.emailProprietario;
+  $('cfg-telefoneProprietario').value = cfg.padroes.telefoneProprietario;
   $('config').hidden = false;
   mensagem(aviso, 'alerta');
   $('cfg-apiKey').focus();
@@ -227,7 +229,12 @@ async function salvarConfigPainel() {
   if (!apiKey) { mensagem('Cole a chave da API do Gemini.'); return; }
   await salvarConfig({
     apiKey,
-    padroes: { nacionalidade: $('cfg-nacionalidade').value.trim().toUpperCase(), propriedade: $('cfg-propriedade').value },
+    padroes: {
+      nacionalidade: $('cfg-nacionalidade').value.trim().toUpperCase(),
+      propriedade: $('cfg-propriedade').value,
+      emailProprietario: $('cfg-emailProprietario').value.trim().toLowerCase(),
+      telefoneProprietario: $('cfg-telefoneProprietario').value.trim(),
+    },
   });
   $('config').hidden = true;
   mensagem('Configurações salvas.', 'alerta');

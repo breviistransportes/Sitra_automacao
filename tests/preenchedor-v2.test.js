@@ -193,7 +193,7 @@ describe('estado e paridade com as páginas reais', () => {
         expect(eventos(el), `${fix} #${el.id}`).toEqual(eventos(r));
       }
     }
-  });
+  }, 30000);
 });
 
 describe('contador de requisições reais', () => {

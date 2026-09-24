@@ -44,12 +44,9 @@ describe('aplicarRegras', () => {
     expect(r.prop_rg.valor).toBe('');
   });
 
-  it('e-mail e telefone do proprietário caem para os do motorista', () => {
+  it('telefone do proprietário cai para o do motorista', () => {
     const r = aplicarRegras(valores({ ...MOTORISTA, prop_cpf_cnpj: '11.222.333/0001-81' }), { hoje: HOJE });
-    expect(r.prop_email.valor).toBe('jose@exemplo.com');
     expect(r.prop_telefone.valor).toBe('(11)98765-4321');
-    const r2 = aplicarRegras(valores({ ...MOTORISTA, prop_email: 'empresa@x.com' }), { hoje: HOJE });
-    expect(r2.prop_email.valor).toBe('empresa@x.com');
   });
 
   it('valores fixos: IE, dependentes e CIOT', () => {
@@ -106,5 +103,20 @@ describe('aplicarRegras', () => {
     const r3 = aplicarRegras(valores({}), { hoje: HOJE });
     expect(r3.nome_pai.valor).toBe('');
     expect(r3.nome_mae.valor).toBe('');
+  });
+
+  it('e-mail do proprietário: sempre o da empresa (configurável)', () => {
+    const r1 = aplicarRegras(valores({ ...MOTORISTA, prop_email: 'outro@x.com' }), { hoje: HOJE });
+    expect(r1.prop_email).toEqual({ valor: 'comercial2@breviis.com.br', certeza: 'alta', fonte: 'padrão' });
+    const r2 = aplicarRegras(valores({}), { hoje: HOJE, padroes: { emailProprietario: 'cadastro@breviis.com.br' } });
+    expect(r2.prop_email.valor).toBe('cadastro@breviis.com.br');
+  });
+
+  it('telefone do proprietário: celular do motorista, senão fixo do motorista, senão o padrão', () => {
+    expect(aplicarRegras(valores({ celular: '(11)98765-4321' }), { hoje: HOJE }).prop_telefone.valor).toBe('(11)98765-4321');
+    expect(aplicarRegras(valores({ fone_residencial: '(11)3333-4444' }), { hoje: HOJE }).prop_telefone.valor).toBe('(11)3333-4444');
+    const r3 = aplicarRegras(valores({}), { hoje: HOJE, padroes: { telefoneProprietario: '(31) 3333-0000' } });
+    expect(r3.prop_telefone).toEqual({ valor: '(31)3333-0000', certeza: 'alta', fonte: 'padrão' });
+    expect(aplicarRegras(valores({}), { hoje: HOJE }).prop_telefone.valor).toBe('');
   });
 });

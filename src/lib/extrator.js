@@ -248,5 +248,5 @@ export function posProcessar(bruto, padroes, { hoje = new Date(), textoConfiavel
   let conferidos = compararLeituras(valores, segundaSemDivergentes, avisos);
   if (terceiraLeitura) conferidos = desempatar(conferidos, segundaLeitura, terceiraLeitura, avisos);
   conferidos = conferirComTextoPdf(conferidos, textoPdf, avisos);
-  return { valores: aplicarRegras(conferidos, { hoje }), avisos, documentos: bruto?.documentos_encontrados ?? [] };
+  return { valores: aplicarRegras(conferidos, { hoje, padroes }), avisos, documentos: bruto?.documentos_encontrados ?? [] };
 }

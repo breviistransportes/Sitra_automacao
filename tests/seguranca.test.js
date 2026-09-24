@@ -50,7 +50,7 @@ describe('Médio 1 — conteúdo hostil vindo dos documentos/mensagens', () => {
     expect(r.valores.celular.valor).toBe('(31)99876-5432');
     expect(r.valores.fone_residencial.valor).toBe('(31)99876-5432'); // o inventado foi descartado; cai no celular
     expect(r.valores.email.valor).toBe('');
-    expect(r.valores.prop_email.valor).toBe('carlos@exemplo.com');
+    expect(r.valores.prop_email.valor).toBe('comercial2@breviis.com.br'); // regra do operador: sempre o da empresa
     expect(r.avisos.join(' ')).toMatch(/E-mail: ignorado "atacante@evil.com"/);
   });
 

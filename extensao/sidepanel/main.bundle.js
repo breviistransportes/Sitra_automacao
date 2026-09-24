@@ -2880,8 +2880,9 @@ var FIXOS = {
   prop_conta_digito: "0",
   prop_tipo_conta: "1"
 };
+var EMAIL_PROPRIETARIO = "comercial2@breviis.com.br";
 var data = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-function aplicarRegras(valores, { hoje = /* @__PURE__ */ new Date() } = {}) {
+function aplicarRegras(valores, { hoje = /* @__PURE__ */ new Date(), padroes = {} } = {}) {
   const v = { ...valores };
   const definir = (chave, valor, fonte, certeza = "alta") => {
     v[chave] = { valor: normalizarCampo(CAMPO_POR_CHAVE[chave], valor), certeza, fonte };
@@ -2901,8 +2902,10 @@ function aplicarRegras(valores, { hoje = /* @__PURE__ */ new Date() } = {}) {
   if (cpfProp && cpfProp === somenteDigitos(v.cpf?.valor)) {
     for (const [destino, origem] of DADOS_PESSOAIS) copiar(destino, origem);
   }
-  if (!v.prop_email?.valor) copiar("prop_email", "email");
+  definir("prop_email", padroes.emailProprietario || EMAIL_PROPRIETARIO, "padr\xE3o");
   if (!v.prop_telefone?.valor) copiar("prop_telefone", "celular");
+  if (!v.prop_telefone?.valor) copiar("prop_telefone", "fone_residencial");
+  if (!v.prop_telefone?.valor && padroes.telefoneProprietario) definir("prop_telefone", padroes.telefoneProprietario, "padr\xE3o");
   for (const [chave, valor] of Object.entries(FIXOS)) definir(chave, valor, "regra");
   if (!v.prop_venc_rntrc?.valor) definir("prop_venc_rntrc", data(hoje), "regra (hoje)");
   if (v.prop_cpf_cnpj?.valor) definir("veic_cpf_cnpj_prop", v.prop_cpf_cnpj.valor, "propriet\xE1rio", v.prop_cpf_cnpj.certeza);
@@ -3232,7 +3235,7 @@ function posProcessar(bruto, padroes, { hoje = /* @__PURE__ */ new Date(), texto
   let conferidos = compararLeituras(valores, segundaSemDivergentes, avisos);
   if (terceiraLeitura) conferidos = desempatar(conferidos, segundaLeitura, terceiraLeitura, avisos);
   conferidos = conferirComTextoPdf(conferidos, textoPdf, avisos);
-  return { valores: aplicarRegras(conferidos, { hoje }), avisos, documentos: bruto?.documentos_encontrados ?? [] };
+  return { valores: aplicarRegras(conferidos, { hoje, padroes }), avisos, documentos: bruto?.documentos_encontrados ?? [] };
 }
 
 // node_modules/pdfjs-dist/build/pdf.mjs
@@ -31029,7 +31032,7 @@ async function textoDoPdf(bytes) {
 }
 
 // src/lib/config.js
-var PADROES = { propriedade: "3", nacionalidade: "BRASILEIRA" };
+var PADROES = { propriedade: "3", nacionalidade: "BRASILEIRA", emailProprietario: "comercial2@breviis.com.br", telefoneProprietario: "" };
 async function lerConfig(storage = chrome.storage.local) {
   const r = await storage.get(["apiKey", "padroes"]);
   return { apiKey: r.apiKey ?? "", padroes: { ...PADROES, ...r.padroes ?? {} } };
@@ -31312,6 +31315,8 @@ async function abrirConfig(aviso = "") {
   $("cfg-apiKey").value = cfg.apiKey;
   $("cfg-nacionalidade").value = cfg.padroes.nacionalidade;
   $("cfg-propriedade").value = cfg.padroes.propriedade;
+  $("cfg-emailProprietario").value = cfg.padroes.emailProprietario;
+  $("cfg-telefoneProprietario").value = cfg.padroes.telefoneProprietario;
   $("config").hidden = false;
   mensagem(aviso, "alerta");
   $("cfg-apiKey").focus();
@@ -31324,7 +31329,12 @@ async function salvarConfigPainel() {
   }
   await salvarConfig({
     apiKey,
-    padroes: { nacionalidade: $("cfg-nacionalidade").value.trim().toUpperCase(), propriedade: $("cfg-propriedade").value }
+    padroes: {
+      nacionalidade: $("cfg-nacionalidade").value.trim().toUpperCase(),
+      propriedade: $("cfg-propriedade").value,
+      emailProprietario: $("cfg-emailProprietario").value.trim().toLowerCase(),
+      telefoneProprietario: $("cfg-telefoneProprietario").value.trim()
+    }
   });
   $("config").hidden = true;
   mensagem("Configura\xE7\xF5es salvas.", "alerta");

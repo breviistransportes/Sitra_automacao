@@ -8,10 +8,12 @@ const DADOS_PESSOAIS = [['prop_nome', 'nome'], ['prop_rg', 'rg'], ['prop_org_exp
 const FIXOS = { prop_ie: 'ISENTO', prop_dependentes: '0', prop_banco: '0', prop_agencia: '0', prop_agencia_digito: '0',
   prop_conta: '0', prop_conta_digito: '0', prop_tipo_conta: '1' };
 
+export const EMAIL_PROPRIETARIO = 'comercial2@breviis.com.br';
+
 const data = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
 // Regras da spec §11: o que não vem dos documentos é derivado aqui, de forma determinística.
-export function aplicarRegras(valores, { hoje = new Date() } = {}) {
+export function aplicarRegras(valores, { hoje = new Date(), padroes = {} } = {}) {
   const v = { ...valores };
   const definir = (chave, valor, fonte, certeza = 'alta') => {
     v[chave] = { valor: normalizarCampo(CAMPO_POR_CHAVE[chave], valor), certeza, fonte };
@@ -39,8 +41,12 @@ export function aplicarRegras(valores, { hoje = new Date() } = {}) {
   if (cpfProp && cpfProp === somenteDigitos(v.cpf?.valor)) {
     for (const [destino, origem] of DADOS_PESSOAIS) copiar(destino, origem);
   }
-  if (!v.prop_email?.valor) copiar('prop_email', 'email');
+  // E-mail do proprietário: sempre o da empresa (regra do operador; configurável).
+  definir('prop_email', padroes.emailProprietario || EMAIL_PROPRIETARIO, 'padrão');
+  // Telefone do proprietário: qualquer um serve — celular do motorista, senão o fixo, senão o padrão configurado.
   if (!v.prop_telefone?.valor) copiar('prop_telefone', 'celular');
+  if (!v.prop_telefone?.valor) copiar('prop_telefone', 'fone_residencial');
+  if (!v.prop_telefone?.valor && padroes.telefoneProprietario) definir('prop_telefone', padroes.telefoneProprietario, 'padrão');
 
   for (const [chave, valor] of Object.entries(FIXOS)) definir(chave, valor, 'regra');
   if (!v.prop_venc_rntrc?.valor) definir('prop_venc_rntrc', data(hoje), 'regra (hoje)');
