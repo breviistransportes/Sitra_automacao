@@ -129,6 +129,9 @@ describe('preenchedor', () => {
     const rel = await p.preencher(VALORES);
     expect(rel.ok).toBe(false);
     expect(rel.erro).toMatch(/demorou demais/);
+    // Diagnóstico: diz em qual campo parou e o que estava pendente.
+    expect(rel.erro).toContain('CPF');
+    expect(rel.erro).toContain('requisições pendentes: 1');
   });
 
   it('ViaCEP que apaga logradouro/bairro chega antes do relatório (espera o JSONP)', async () => {

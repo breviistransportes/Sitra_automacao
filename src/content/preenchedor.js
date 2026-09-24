@@ -22,6 +22,7 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
   // O ViaCEP (pesquisaCep) é JSONP entre domínios: o jQuery 1.11 não o conta em jQuery.active,
   // então também esperamos a tag <script> do ViaCEP sumir.
   const ocupado = () => (win.jQuery?.active ?? 0) > 0 || !!doc.querySelector('script[src*="viacep.com.br"]');
+  let ultimoCampo = 'início';
 
   async function aguardarSitra() {
     const fim = Date.now() + timeoutMs;
@@ -32,7 +33,8 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
       if (ociosos >= 2) return;
       await esperar(intervaloMs);
     }
-    throw new Error('O Sitra demorou demais para responder. Tente de novo.');
+    const viacep = doc.querySelector('script[src*="viacep.com.br"]') ? 'sim' : 'não';
+    throw new Error(`O Sitra demorou demais para responder (último campo: ${ultimoCampo}; requisições pendentes: ${win.jQuery?.active ?? '?'}; ViaCEP pendente: ${viacep}). Tente de novo.`);
   }
 
   const visivel = (id) => {
@@ -70,6 +72,7 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
         avisos.push(`Campo ${campo.rotulo} não existe mais na página do Sitra`);
         return;
       }
+      ultimoCampo = campo.rotulo;
       e.value = valores[chave];
       e.dispatchEvent(new win.Event('input', { bubbles: true }));
       e.dispatchEvent(new win.Event('change', { bubbles: true }));
