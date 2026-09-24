@@ -26,7 +26,6 @@
     { chave: "org_exp", id: "txtOrgExp", rotulo: "Org. Exp.", tipo: "texto", max: 10, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "\xD3rg\xE3o emissor do RG (ex.: SSP)" },
     { chave: "data_expedicao_rg", id: "txtDataExpedicao", rotulo: "Data Expedi\xE7\xE3o (RG)", tipo: "data", max: 10, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "Data de expedi\xE7\xE3o do RG \u2014 s\xF3 existe no pr\xF3prio RG" },
     { chave: "registro_cnh", id: "txtNumeroCnh", rotulo: "N\xBA Registro CNH", tipo: "registro_cnh", max: 14, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "N\xBA REGISTRO da CNH (11 d\xEDgitos)" },
-    { chave: "numero_espelho_cnh", id: "txtRegistroCNH", rotulo: "N\xBA CNH (espelho)", tipo: "digitos", max: 10, obrigatorio: false, grupo: "Documenta\xE7\xE3o", dica: "N\xFAmero do espelho da CNH (diferente do registro), se vis\xEDvel" },
     { chave: "data_primeira_cnh", id: "txtDataPrimeiraCnh", rotulo: "Data Primeira CNH", tipo: "data", max: 10, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "1\xAA HABILITA\xC7\xC3O" },
     { chave: "data_emissao_cnh", id: "txtDataEmissaoCnh", rotulo: "Data Emiss\xE3o CNH", tipo: "data", max: 10, obrigatorio: false, grupo: "Documenta\xE7\xE3o", dica: "DATA EMISS\xC3O da CNH" },
     { chave: "data_validade_cnh", id: "txtDataValidadeCnh", rotulo: "Data Validade CNH", tipo: "data", max: 10, obrigatorio: true, grupo: "Documenta\xE7\xE3o", dica: "VALIDADE da CNH" },
@@ -276,7 +275,7 @@
           await definirEAguardar("uf_naturalidade");
           definirSeTiver("naturalidade");
           await endereco(ENDERECO.motorista);
-          ["rg", "uf_exp", "org_exp", "data_expedicao_rg", "registro_cnh", "numero_espelho_cnh", "data_primeira_cnh", "data_emissao_cnh", "data_validade_cnh", "categoria_cnh"].forEach(definirSeTiver);
+          ["rg", "uf_exp", "org_exp", "data_expedicao_rg", "registro_cnh", "data_primeira_cnh", "data_emissao_cnh", "data_validade_cnh", "categoria_cnh"].forEach(definirSeTiver);
           await definirEAguardar("placa");
           registrarModal();
           return null;

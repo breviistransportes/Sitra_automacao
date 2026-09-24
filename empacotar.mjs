@@ -7,7 +7,7 @@ import { join, relative, sep } from 'node:path';
 const RAIZ = 'extensao';
 const SAIDA = process.argv[2] ?? 'cadastro-motorista-sitra.zip';
 
-for (const obrigatorio of ['sidepanel/main.bundle.js', 'options/main.bundle.js', 'content/injetado.bundle.js']) {
+for (const obrigatorio of ['sidepanel/main.bundle.js', 'sidepanel/pdf.worker.min.mjs', 'options/main.bundle.js', 'content/injetado.bundle.js']) {
   if (!existsSync(join(RAIZ, obrigatorio))) throw new Error(`Falta ${obrigatorio} — rode "npm run build" antes.`);
 }
 

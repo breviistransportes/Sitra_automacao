@@ -79,7 +79,7 @@ describe('prepararDocumentos', () => {
       { nome: 'a.jpg', mediaType: 'image/jpeg', base64: paraBase64(enc('img')) },
       { nome: 'b.png', mediaType: 'image/png', base64: paraBase64(enc('png')) },
     ]);
-    expect(r.pdfs).toEqual([{ nome: 'c.pdf', base64: paraBase64(enc('%PDF-1.4')) }]);
+    expect(r.pdfs).toEqual([{ nome: 'c.pdf', base64: paraBase64(enc('%PDF-1.4')), texto: '' }]);
     expect(r.avisos).toEqual([]);
   });
 

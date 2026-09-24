@@ -1,6 +1,8 @@
 import { lerEntrada, prepararDocumentos, temConteudo } from '../lib/entrada.js';
 import { redimensionarImagem } from '../lib/imagem.js';
-import { chamarGemini, posProcessar } from '../lib/extrator.js';
+import { chamarGemini, chamarGeminiConferencia, posProcessar } from '../lib/extrator.js';
+import { textoDoPdf } from '../lib/pdf.js';
+import { camposDivergentes } from '../lib/conferencia.js';
 import { lerConfig, salvarConfig } from '../lib/config.js';
 import { montarFormulario, lerFormulario, mostrarAba } from './formulario.js';
 import { versaoMaior, linkAtualizacaoValido } from '../lib/versao.js';
@@ -68,7 +70,7 @@ async function lerDocumentos() {
   mostrar('lendo');
   try {
     const entrada = await lerEntrada(arquivos);
-    const docs = await prepararDocumentos(entrada.itens, { redimensionar: redimensionarImagem });
+    const docs = await prepararDocumentos(entrada.itens, { redimensionar: redimensionarImagem, lerTextoPdf: textoDoPdf });
     docs.mensagens = $('mensagens').value;
     const avisosEntrada = [
       ...entrada.naoSuportados.map(n => `${n}: formato não suportado — solte os arquivos direto ou use .zip`),
@@ -79,7 +81,19 @@ async function lerDocumentos() {
     }
     // Telefone/e-mail só são aceitos se estiverem escritos nas mensagens/conversas enviadas.
     const textoConfiavel = [docs.mensagens ?? '', ...docs.textos.map(t => t.conteudo)].join('\n');
-    const r = posProcessar(await chamarGemini(cfg.apiKey, docs), cfg.padroes, { textoConfiavel });
+    // Duas leituras em paralelo: a completa e a conferência dos números da CNH (modelo mais forte).
+    const [bruto, segunda] = await Promise.all([
+      chamarGemini(cfg.apiKey, docs),
+      chamarGeminiConferencia(cfg.apiKey, docs).catch(e => ({ erro: e.message })),
+    ]);
+    if (segunda.erro) avisosEntrada.push(`Segunda leitura indisponível (${segunda.erro}) — confira com atenção os números da CNH.`);
+    const textoPdf = docs.pdfs.map(p => p.texto).join('\n');
+    const segundaLeitura = segunda.erro ? null : segunda;
+    // Discordaram em algum número da CNH? Uma terceira leitura desempata (2 de 3).
+    const terceiraLeitura = camposDivergentes(bruto?.campos, segundaLeitura).length
+      ? await chamarGeminiConferencia(cfg.apiKey, docs).catch(() => null)
+      : null;
+    const r = posProcessar(bruto, cfg.padroes, { textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura });
     $('form-conferencia').innerHTML = montarFormulario(r.valores);
     const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(', ')}`] : [];
     preencherLista($('avisos'), [...docsLidos, ...avisosEntrada, ...r.avisos]);

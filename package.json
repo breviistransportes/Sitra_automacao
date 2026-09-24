@@ -15,7 +15,8 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "jszip": "^3.10.2"
+    "jszip": "^3.10.2",
+    "pdfjs-dist": "^6.3.289"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

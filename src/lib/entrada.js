@@ -77,7 +77,7 @@ export function temConteudo(docs, mensagens) {
 const semRedimensionar =async (bytes, nome) => ({ bytes, mediaType: /\.png$/i.test(nome) ? 'image/png' : 'image/jpeg' });
 
 // Limite de 18 MB (em base64) para caber no envio inline da API do Gemini.
-export async function prepararDocumentos(itens, { redimensionar = semRedimensionar, limiteBytes = 18 * MB } = {}) {
+export async function prepararDocumentos(itens, { redimensionar = semRedimensionar, limiteBytes = 18 * MB, lerTextoPdf = async () => '' } = {}) {
   const textos = [], imagens = [], pdfs = [], avisos = [];
   let total = 0;
   // Soma a cada arquivo e para cedo: não adianta redimensionar o resto se já passou do limite.
@@ -99,7 +99,9 @@ export async function prepararDocumentos(itens, { redimensionar = semRedimension
       }
       const base64 = paraBase64(it.bytes);
       somar(base64.length);
-      pdfs.push({ nome: it.nome, base64 });
+      // Texto embutido no PDF (CRV/CRLV digital traz texto exato); falha na leitura não impede o envio.
+      const texto = await lerTextoPdf(it.bytes).catch(() => '');
+      pdfs.push({ nome: it.nome, base64, texto });
     } else if (it.tipo === 'imagem') {
       let r;
       try {
