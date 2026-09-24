@@ -26,6 +26,11 @@ export function aplicarRegras(valores, { hoje = new Date() } = {}) {
     definir('data_expedicao_rg', v.data_emissao_cnh.valor, 'CNH (data de emissão)', v.data_emissao_cnh.certeza);
   }
 
+  // Filiação: quem não consta vai como "NÃO DECLARADO" (o Sitra exige pai e mãe). Sem nenhum nome, fica vazio.
+  const pai = v.nome_pai?.valor, mae = v.nome_mae?.valor;
+  if (!pai && mae) definir('nome_pai', 'NÃO DECLARADO', 'regra (não consta na filiação)', 'conferir');
+  if (!mae && pai) definir('nome_mae', 'NÃO DECLARADO', 'regra (não consta na filiação)', 'conferir');
+
   // Proprietário: endereço sempre o do motorista.
   for (const [destino, origem] of ENDERECO) copiar(destino, origem);
 

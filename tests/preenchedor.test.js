@@ -12,7 +12,7 @@ const VALORES = {
   estado_civil: 'CASADO', nome_pai: 'JOAO DA SILVA', nome_mae: 'MARIA DA SILVA', uf_naturalidade: 'MG',
   naturalidade: 'BELO HORIZONTE', nacionalidade: 'BRASILEIRA', propriedade: '3', celular: '(11)98765-4321',
   fone_residencial: '(11)98765-4321', email: 'jose@exemplo.com', rg: '123456789', uf_exp: 'SP', org_exp: 'SSP',
-  data_expedicao_rg: '10/01/2005', registro_cnh: '01234567890', numero_espelho_cnh: '',
+  data_expedicao_rg: '10/01/2005', registro_cnh: '01234567890',
   data_primeira_cnh: '20/05/2005', data_emissao_cnh: '01/02/2023', data_validade_cnh: '01/02/2033', categoria_cnh: 'AE',
 };
 

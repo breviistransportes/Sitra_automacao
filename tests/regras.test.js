@@ -96,4 +96,15 @@ describe('aplicarRegras', () => {
     expect(aplicarRegras(valores({ data_emissao_cnh: '01/02/2023', data_expedicao_rg: '10/01/2005' }), { hoje: HOJE }).data_expedicao_rg.valor).toBe('10/01/2005');
     expect(aplicarRegras(valores({}), { hoje: HOJE }).data_expedicao_rg.valor).toBe('');
   });
+
+  it('filiação: quem não aparece vira NÃO DECLARADO', () => {
+    const r1 = aplicarRegras(valores({ nome_mae: 'MARIA DA SILVA' }), { hoje: HOJE });
+    expect(r1.nome_pai).toEqual({ valor: 'NÃO DECLARADO', certeza: 'conferir', fonte: 'regra (não consta na filiação)' });
+    expect(r1.nome_mae.valor).toBe('MARIA DA SILVA');
+    const r2 = aplicarRegras(valores({ nome_pai: 'JOAO DA SILVA' }), { hoje: HOJE });
+    expect(r2.nome_mae.valor).toBe('NÃO DECLARADO');
+    const r3 = aplicarRegras(valores({}), { hoje: HOJE });
+    expect(r3.nome_pai.valor).toBe('');
+    expect(r3.nome_mae.valor).toBe('');
+  });
 });

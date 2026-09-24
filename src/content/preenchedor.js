@@ -157,7 +157,7 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
         await definirEAguardar('uf_naturalidade');
         definirSeTiver('naturalidade');
         await endereco(ENDERECO.motorista);
-        ['rg', 'uf_exp', 'org_exp', 'data_expedicao_rg', 'registro_cnh', 'numero_espelho_cnh', 'data_primeira_cnh', 'data_emissao_cnh', 'data_validade_cnh', 'categoria_cnh'].forEach(definirSeTiver);
+        ['rg', 'uf_exp', 'org_exp', 'data_expedicao_rg', 'registro_cnh', 'data_primeira_cnh', 'data_emissao_cnh', 'data_validade_cnh', 'categoria_cnh'].forEach(definirSeTiver);
         await definirEAguardar('placa');
         registrarModal();
         return null;

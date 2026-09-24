@@ -15,7 +15,7 @@ describe('CAMPOS', () => {
       'txtMotoristaCpf', 'txtMotoristaNome', 'txtCep', 'txtEndereco', 'txtNumero', 'txtComplemento',
       'txtBairro', 'txtUf', 'txtCidade', 'txtDataNascimento', 'txtEstadoCivil', 'txtNomePai', 'txtNomeMae',
       'txtNaturalidadeUf', 'txtNaturalidade', 'txtNacionalidade', 'txtPropriedade', 'txtResidencial',
-      'txtCelular', 'txtRg', 'txtUfExp', 'txtOrgExp', 'txtDataExpedicao', 'txtNumeroCnh', 'txtRegistroCNH',
+      'txtCelular', 'txtRg', 'txtUfExp', 'txtOrgExp', 'txtDataExpedicao', 'txtNumeroCnh',
       'txtDataPrimeiraCnh', 'txtDataEmissaoCnh', 'txtDataValidadeCnh', 'txtCategoriaCnh', 'txtEmail', 'txtPlacaVeiculo',
     ];
     expect(camposDaTela('motorista').map(c => c.id).sort()).toEqual([...ids].sort());
@@ -23,7 +23,7 @@ describe('CAMPOS', () => {
 
   it('mapeia o registro da CNH para txtNumeroCnh (ids trocados no Sitra)', () => {
     expect(CAMPO_POR_CHAVE.registro_cnh.id).toBe('txtNumeroCnh');
-    expect(CAMPO_POR_CHAVE.numero_espelho_cnh.id).toBe('txtRegistroCNH');
+    expect(CAMPO_POR_CHAVE.numero_espelho_cnh).toBeUndefined(); // o operador não usa o "Nº CNH" do Sitra
   });
 
   it('todo campo tem rótulo, grupo e dica', () => {

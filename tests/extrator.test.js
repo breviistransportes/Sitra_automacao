@@ -158,12 +158,10 @@ describe('Nº de Registro da CNH', () => {
     expect(r.avisos.join(' ')).toMatch(/Nº Registro CNH: valor lido "123456789"/);
   });
 
-  it('não pode ser o CPF nem o número do espelho', () => {
+  it('não pode ser o CPF', () => {
     const r = pp({ cpf: c('52998224725'), registro_cnh: c('52998224725') });
     expect(r.valores.registro_cnh.valor).toBe('');
     expect(r.avisos.join(' ')).toMatch(/Nº Registro CNH.*CPF/);
-    const r2 = pp({ numero_espelho_cnh: c('01234567890'), registro_cnh: c('01234567890') });
-    expect(r2.valores.registro_cnh.valor).toBe('');
   });
 
   it('válido fica, mas sempre em amarelo', () => {

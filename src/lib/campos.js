@@ -5,7 +5,7 @@ export const UFS = [
 
 // Ordem = ordem de exibição na tela de conferência.
 // ia: extraído pela IA; os demais vêm de regras (regras.js) ou de padrões da configuração.
-// ATENÇÃO: no Sitra, "Nº Registro CNH" é txtNumeroCnh e "Nº CNH" (espelho) é txtRegistroCNH.
+// ATENÇÃO: no Sitra, "Nº Registro CNH" é txtNumeroCnh. O "Nº CNH" (txtRegistroCNH) não é usado pelo operador.
 const MOTORISTA = [
   { chave: 'cpf', id: 'txtMotoristaCpf', rotulo: 'CPF', tipo: 'cpf', max: 14, obrigatorio: true, grupo: 'Identificação', dica: 'CPF do motorista (na CNH ou em outro documento)' },
   { chave: 'nome', id: 'txtMotoristaNome', rotulo: 'Nome', tipo: 'texto', max: 50, obrigatorio: true, grupo: 'Identificação', dica: 'Nome completo como está na CNH' },
@@ -36,7 +36,6 @@ const MOTORISTA = [
   { chave: 'org_exp', id: 'txtOrgExp', rotulo: 'Org. Exp.', tipo: 'texto', max: 10, obrigatorio: true, grupo: 'Documentação', dica: 'Órgão emissor do RG (ex.: SSP)' },
   { chave: 'data_expedicao_rg', id: 'txtDataExpedicao', rotulo: 'Data Expedição (RG)', tipo: 'data', max: 10, obrigatorio: true, grupo: 'Documentação', dica: 'Data de expedição do RG — só existe no próprio RG' },
   { chave: 'registro_cnh', id: 'txtNumeroCnh', rotulo: 'Nº Registro CNH', tipo: 'registro_cnh', max: 14, obrigatorio: true, grupo: 'Documentação', dica: 'Nº REGISTRO da CNH (11 dígitos)' },
-  { chave: 'numero_espelho_cnh', id: 'txtRegistroCNH', rotulo: 'Nº CNH (espelho)', tipo: 'digitos', max: 10, obrigatorio: false, grupo: 'Documentação', dica: 'Número do espelho da CNH (diferente do registro), se visível' },
   { chave: 'data_primeira_cnh', id: 'txtDataPrimeiraCnh', rotulo: 'Data Primeira CNH', tipo: 'data', max: 10, obrigatorio: true, grupo: 'Documentação', dica: '1ª HABILITAÇÃO' },
   { chave: 'data_emissao_cnh', id: 'txtDataEmissaoCnh', rotulo: 'Data Emissão CNH', tipo: 'data', max: 10, obrigatorio: false, grupo: 'Documentação', dica: 'DATA EMISSÃO da CNH' },
   { chave: 'data_validade_cnh', id: 'txtDataValidadeCnh', rotulo: 'Data Validade CNH', tipo: 'data', max: 10, obrigatorio: true, grupo: 'Documentação', dica: 'VALIDADE da CNH' },
