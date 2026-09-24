@@ -2749,7 +2749,7 @@ function formatarEstadoCivil(v) {
   return s.slice(0, 9);
 }
 function formatarRg(v) {
-  return maiusculas(v).replace(/[^0-9A-Z]/g, "");
+  return maiusculas(v).replace(/[^0-9A-Z]/g, "").replace(/^[A-Z]{2}(?=\d)/, "00");
 }
 function formatarCategoria(v) {
   return maiusculas(v).replace(/[^A-E]/g, "").slice(0, 4);
@@ -2932,7 +2932,7 @@ CNH / CNH-e:
 - "1\xAA HABILITA\xC7\xC3O" \u2192 data_primeira_cnh. "DATA EMISS\xC3O" \u2192 data_emissao_cnh. "VALIDADE" \u2192 data_validade_cnh. "CAT. HAB." \u2192 categoria_cnh.
 - "FILIA\xC7\xC3O" traz os nomes dos pais, um embaixo do outro: o primeiro nome \xE9 o do PAI \u2192 nome_pai; o segundo \xE9 o da M\xC3E \u2192 nome_mae. Cada nome completo pode ocupar mais de uma linha. Preencha s\xF3 os nomes que estiverem escritos: se houver um s\xF3 nome, \xE9 o da m\xE3e e nome_pai fica ""; se n\xE3o houver filia\xE7\xE3o leg\xEDvel, nome_pai e nome_mae ficam "". Nunca invente o nome do pai ou da m\xE3e.
 - "DATA, LOCAL E UF DE NASCIMENTO" \u2192 data_nascimento, naturalidade (cidade) e uf_naturalidade.
-- "DOC. IDENTIDADE / \xD3RG. EMISSOR / UF" \u2192 rg, org_exp, uf_exp.
+- rg = o n\xFAmero do campo "DOC. IDENTIDADE / \xD3RG. EMISSOR / UF" da CNH, copiado como est\xE1 escrito (inclusive letras no in\xEDcio, ex.: MG12345678), sem o \xF3rg\xE3o emissor e sem a UF; org_exp = o \xF3rg\xE3o emissor (ex.: SSP, PC, DETRAN); uf_exp = a UF desse campo. Use o RG da CNH mesmo que outro documento tenha outro n\xFAmero.
 
 Outros documentos:
 - data_expedicao_rg: data de expedi\xE7\xE3o do pr\xF3prio RG, se o RG foi enviado; sen\xE3o use a DATA EMISS\xC3O da CNH.

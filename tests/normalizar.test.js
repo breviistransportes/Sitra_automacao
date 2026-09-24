@@ -113,3 +113,17 @@ describe('normalizar', () => {
     expect(normalizarCampo(CAMPO_POR_CHAVE.prop_rntrc, '12345678')).toBe('12345678');
   });
 });
+
+describe('RG da CNH (DOC. IDENTIDADE)', () => {
+  it('as 2 letras do início viram 00', () => {
+    expect(normalizarCampo(CAMPO_POR_CHAVE.rg, 'MG12345678')).toBe('0012345678');
+    expect(normalizarCampo(CAMPO_POR_CHAVE.rg, 'mg-12.345.678')).toBe('0012345678');
+    expect(normalizarCampo(CAMPO_POR_CHAVE.rg, 'SP 1234567')).toBe('001234567');
+    expect(normalizarCampo(CAMPO_POR_CHAVE.prop_rg, 'MG12345678')).toBe('0012345678');
+  });
+
+  it('sem letras no início, fica como está', () => {
+    expect(normalizarCampo(CAMPO_POR_CHAVE.rg, '12.345.678-X')).toBe('12345678X');
+    expect(normalizarCampo(CAMPO_POR_CHAVE.rg, 'M1234567')).toBe('M1234567');
+  });
+});

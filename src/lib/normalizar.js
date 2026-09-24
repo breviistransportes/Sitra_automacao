@@ -72,8 +72,9 @@ export function formatarEstadoCivil(v) {
 }
 
 // O Sitra remove pontuação do RG no blur/keyup.
+// Regra do operador: RG que começa com 2 letras (UF, ex.: MG12345678) vai para o Sitra com "00" no lugar.
 export function formatarRg(v) {
-  return maiusculas(v).replace(/[^0-9A-Z]/g, '');
+  return maiusculas(v).replace(/[^0-9A-Z]/g, '').replace(/^[A-Z]{2}(?=\d)/, '00');
 }
 
 export function formatarCategoria(v) {

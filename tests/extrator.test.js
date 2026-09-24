@@ -178,6 +178,12 @@ describe('Nº de Registro da CNH', () => {
   });
 });
 
+describe('RG pela CNH', () => {
+  it('instrução: RG vem do DOC. IDENTIDADE da CNH, só o número', () => {
+    expect(INSTRUCOES).toMatch(/rg.*DOC. IDENTIDADE/);
+  });
+});
+
 describe('filiação e datas da CNH', () => {
   it('instruções: filiação tem pai e mãe; expedição do RG = emissão da CNH', () => {
     expect(INSTRUCOES).toMatch(/FILIAÇÃO.*primeiro nome.*nome_pai/);

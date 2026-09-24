@@ -25,7 +25,7 @@ CNH / CNH-e:
 - "1ª HABILITAÇÃO" → data_primeira_cnh. "DATA EMISSÃO" → data_emissao_cnh. "VALIDADE" → data_validade_cnh. "CAT. HAB." → categoria_cnh.
 - "FILIAÇÃO" traz os nomes dos pais, um embaixo do outro: o primeiro nome é o do PAI → nome_pai; o segundo é o da MÃE → nome_mae. Cada nome completo pode ocupar mais de uma linha. Preencha só os nomes que estiverem escritos: se houver um só nome, é o da mãe e nome_pai fica ""; se não houver filiação legível, nome_pai e nome_mae ficam "". Nunca invente o nome do pai ou da mãe.
 - "DATA, LOCAL E UF DE NASCIMENTO" → data_nascimento, naturalidade (cidade) e uf_naturalidade.
-- "DOC. IDENTIDADE / ÓRG. EMISSOR / UF" → rg, org_exp, uf_exp.
+- rg = o número do campo "DOC. IDENTIDADE / ÓRG. EMISSOR / UF" da CNH, copiado como está escrito (inclusive letras no início, ex.: MG12345678), sem o órgão emissor e sem a UF; org_exp = o órgão emissor (ex.: SSP, PC, DETRAN); uf_exp = a UF desse campo. Use o RG da CNH mesmo que outro documento tenha outro número.
 
 Outros documentos:
 - data_expedicao_rg: data de expedição do próprio RG, se o RG foi enviado; senão use a DATA EMISSÃO da CNH.
