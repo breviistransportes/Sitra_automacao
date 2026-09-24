@@ -12,7 +12,9 @@ function criarTela(arquivo, caminho, handlers = {}) {
   const win = dom.window;
   const doc = win.document;
   win.jQuery = { active: 0 };
-  const ajax = (fn) => { win.jQuery.active++; setTimeout(() => { fn(); win.jQuery.active--; }, 20); };
+  const ajax = (fn) => { win.jQuery.active++; win.__cmXhrPendentes = (win.__cmXhrPendentes ?? 0) + 1; setTimeout(() => { win.__cmXhrPendentes--; fn(); win.jQuery.active--; }, 20); };
+  // Erro dentro da resposta (jQuery 1.x): a requisição terminou, mas jQuery.active fica preso.
+  const ajaxQuebrado = (fn) => { win.jQuery.active++; win.__cmXhrPendentes = (win.__cmXhrPendentes ?? 0) + 1; setTimeout(() => { win.__cmXhrPendentes--; fn(); }, 20); };
   const limpar = (manter) => { for (const el of doc.querySelectorAll('input, select')) if (el.id !== manter && el.type !== 'button') el.value = ''; };
   const abrirModal = (id, texto, alvo) => { doc.getElementById(id).style.display = 'block'; doc.getElementById(alvo).textContent = texto; };
   // Stubs neutros para os demais handlers inline da página real.
@@ -21,7 +23,7 @@ function criarTela(arquivo, caminho, handlers = {}) {
     pesquisaCep: () => ajax(() => {}), CarregaCidadePorUf: () => ajax(() => {}), CarregaCidadePorUfNatu: () => ajax(() => {}),
     cadProp: { TrataEquiparado() {}, NaoBuscar() { win.naoBuscarChamado = true; } },
   });
-  for (const [nome, fn] of Object.entries(handlers)) win[nome] = (...a) => fn({ win, doc, ajax, limpar, abrirModal }, ...a);
+  for (const [nome, fn] of Object.entries(handlers)) win[nome] = (...a) => fn({ win, doc, ajax, ajaxQuebrado, limpar, abrirModal }, ...a);
   const p = criarPreenchedor(win, { timeoutMs: 1000, intervaloMs: 5 });
   return { win, doc, p, val: (id) => doc.getElementById(id).value };
 }
@@ -72,9 +74,27 @@ describe('proprietário', () => {
     expect(rel.campos.filter(c => c.status === 'falhou' || c.status === 'vazio')).toEqual([]);
   });
 
-  it('já cadastrado: para', async () => {
+  it('CPF que só existe como motorista: o Sitra quebra na resposta, mas a extensão segue e trata como novo', async () => {
+    // Registro EhMot: Search preenche parte dos campos e dá TypeError (this.Gestora.GestoraId de null).
+    const { p, val } = criarTela('proprietario.html', '/Proprietario/CadastroDeProprietario', {
+      Search: ({ doc, ajaxQuebrado }) => ajaxQuebrado(() => {
+        doc.getElementById('txtProprietarioId').value = '0';
+        doc.getElementById('txtNomeProprietario').value = 'JOSE (MOTORISTA)';
+      }),
+    });
+    const rel = await p.preencher(PROP);
+    expect(rel.ok).toBe(true);
+    expect(val('txtNomeProprietario')).toBe('TRANSPORTES FICTICIOS LTDA');
+    expect(val('txtBanco')).toBe('0');
+    expect(val('txtContaCorrente')).toBe('0');
+  });
+
+  it('já cadastrado (o Sitra mostra o botão Alterar): para', async () => {
     const { p } = criarTela('proprietario.html', '/Proprietario/CadastroDeProprietario', {
-      Search: ({ doc, ajax }) => ajax(() => { doc.getElementById('txtProprietarioId').value = '77'; doc.getElementById('txtNomeProprietario').value = 'X'; }),
+      Search: ({ doc, ajax }) => ajax(() => {
+        doc.getElementById('txtProprietarioId').value = '77';
+        doc.getElementById('btnAlterar').setAttribute('type', 'button');
+      }),
     });
     const rel = await p.preencher(PROP);
     expect(rel.ok).toBe(false);
@@ -173,5 +193,23 @@ describe('estado e paridade com as páginas reais', () => {
         expect(eventos(el), `${fix} #${el.id}`).toEqual(eventos(r));
       }
     }
+  });
+});
+
+describe('contador de requisições reais', () => {
+  it('conta um XHR de verdade até o loadend, mesmo se o callback do Sitra der erro', async () => {
+    const win = new JSDOM('<!doctype html><body></body>', { url: BASE + '/Proprietario/CadastroDeProprietario' }).window;
+    criarPreenchedor(win);
+    const xhr = new win.XMLHttpRequest();
+    xhr.onreadystatechange = () => { if (xhr.readyState === 4) throw new Error('erro no callback do Sitra'); };
+    const fim = new Promise(r => xhr.addEventListener('loadend', r));
+    xhr.open('GET', 'data:text/plain,oi');
+    xhr.send();
+    expect(win.__cmXhrPendentes).toBe(1);
+    await fim;
+    await new Promise(r => setTimeout(r, 0));
+    expect(win.__cmXhrPendentes).toBe(0);
+    criarPreenchedor(win); // reinjetar não instala o contador de novo
+    expect(win.__cmXhrPendentes).toBe(0);
   });
 });

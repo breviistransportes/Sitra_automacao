@@ -22,7 +22,7 @@ function criarSitra({ url = URL_SITRA, search, pesquisaCep } = {}) {
   const win = dom.window;
   const doc = win.document;
   win.jQuery = { active: 0 };
-  const ajax = (fn) => { win.jQuery.active++; setTimeout(() => { fn(); win.jQuery.active--; }, 20); };
+  const ajax = (fn) => { win.jQuery.active++; win.__cmXhrPendentes = (win.__cmXhrPendentes ?? 0) + 1; setTimeout(() => { win.__cmXhrPendentes--; fn(); win.jQuery.active--; }, 20); };
   const limparCampos = () => {
     for (const el of doc.querySelectorAll('input, select')) if (el.id !== 'txtMotoristaCpf') el.value = '';
   };
@@ -125,7 +125,7 @@ describe('preenchedor', () => {
 
   it('Sitra que não responde vira erro claro', async () => {
     const { p, win } = criarSitra({ search: () => {} });
-    win.Search = () => { win.jQuery.active = 1; };
+    win.Search = () => { win.jQuery.active = 1; win.__cmXhrPendentes = 1; };
     const rel = await p.preencher(VALORES);
     expect(rel.ok).toBe(false);
     expect(rel.erro).toMatch(/demorou demais/);

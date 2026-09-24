@@ -12,8 +12,30 @@ const ENDERECO = {
 const PARA_VERIFICAR_VAZIO = { motorista: ['cpf', 'nome', 'cep', 'rg'], proprietario: ['prop_cpf_cnpj', 'prop_nome', 'prop_cep'], veiculo: ['veic_placa', 'veic_renavam', 'veic_chassi'] };
 const AVISO_BANCO_ZERO = /banco sem o n[uú]mero 0/i;
 
+// Conta as requisições XHR realmente abertas. Não dá para confiar só em jQuery.active: no jQuery 1.x do
+// Sitra, um erro dentro do callback de sucesso (ex.: Search do proprietário com um CPF que só existe como
+// motorista → this.Gestora.GestoraId de null) pula o "--jQuery.active" e o contador fica preso para sempre.
+function instalarContadorXhr(win) {
+  if (win.__cmXhrInstalado || !win.XMLHttpRequest) return;
+  win.__cmXhrInstalado = true;
+  win.__cmXhrPendentes = win.__cmXhrPendentes ?? 0;
+  const enviar = win.XMLHttpRequest.prototype.send;
+  win.XMLHttpRequest.prototype.send = function (...args) {
+    win.__cmXhrPendentes++;
+    const fim = () => { win.__cmXhrPendentes = Math.max(0, win.__cmXhrPendentes - 1); };
+    this.addEventListener('loadend', fim, { once: true });
+    try {
+      return enviar.apply(this, args);
+    } catch (e) {
+      fim();
+      throw e;
+    }
+  };
+}
+
 // Roda no mundo principal da página (world: "MAIN") para enxergar o jQuery do Sitra.
 export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = {}) {
+  instalarContadorXhr(win);
   const doc = win.document;
   const el = (id) => doc.getElementById(id);
   const esperar = (ms) => new Promise(r => win.setTimeout(r, ms));
@@ -21,7 +43,8 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
 
   // O ViaCEP (pesquisaCep) é JSONP entre domínios: o jQuery 1.11 não o conta em jQuery.active,
   // então também esperamos a tag <script> do ViaCEP sumir.
-  const ocupado = () => (win.jQuery?.active ?? 0) > 0 || !!doc.querySelector('script[src*="viacep.com.br"]');
+  const pendentes = () => (win.__cmXhrInstalado ? win.__cmXhrPendentes : (win.jQuery?.active ?? 0));
+  const ocupado = () => pendentes() > 0 || !!doc.querySelector('script[src*="viacep.com.br"]');
   let ultimoCampo = 'início';
 
   async function aguardarSitra() {
@@ -34,7 +57,7 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
       await esperar(intervaloMs);
     }
     const viacep = doc.querySelector('script[src*="viacep.com.br"]') ? 'sim' : 'não';
-    throw new Error(`O Sitra demorou demais para responder (último campo: ${ultimoCampo}; requisições pendentes: ${win.jQuery?.active ?? '?'}; ViaCEP pendente: ${viacep}). Tente de novo.`);
+    throw new Error(`O Sitra demorou demais para responder (último campo: ${ultimoCampo}; requisições pendentes: ${pendentes()}; jQuery.active: ${win.jQuery?.active ?? '?'}; ViaCEP pendente: ${viacep}). Tente de novo.`);
   }
 
   const visivel = (id) => {
@@ -91,7 +114,7 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
     };
 
     // Documento principal (CPF, CPF/CNPJ ou placa) primeiro: a busca do Sitra limpa o formulário quando é novo.
-    const identificar = async (chave, idExistente, rotulo) => {
+    const identificar = async (chave, jaExiste, rotulo) => {
       definir(chave);
       await aguardarSitra();
       if (visivel('ModalAsk')) {
@@ -102,7 +125,7 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
       }
       const msg = registrarModal();
       if (!valorDe(chave)) return `O Sitra recusou o ${rotulo}${msg ? `: ${msg}` : ''}.`;
-      if ((el(idExistente)?.value ?? '').trim()) return `Este ${TELAS[tela].rotulo.toLowerCase()} já está cadastrado no Sitra. Nada foi alterado além do ${rotulo}.`;
+      if (jaExiste()) return `Este ${TELAS[tela].rotulo.toLowerCase()} já está cadastrado no Sitra. Nada foi alterado além do ${rotulo}.`;
       return null;
     };
 
@@ -128,7 +151,7 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
 
     const SEQUENCIAS = {
       async motorista() {
-        const erro = await identificar('cpf', 'txtStatusMotorista', 'CPF');
+        const erro = await identificar('cpf', () => !!(el('txtStatusMotorista')?.value ?? '').trim(), 'CPF');
         if (erro) return erro;
         ['nome', 'data_nascimento', 'estado_civil', 'nome_pai', 'nome_mae', 'nacionalidade', 'propriedade', 'celular', 'fone_residencial', 'email'].forEach(definirSeTiver);
         await definirEAguardar('uf_naturalidade');
@@ -140,7 +163,9 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
         return null;
       },
       async proprietario() {
-        const erro = await identificar('prop_cpf_cnpj', 'txtProprietarioId', 'CPF/CNPJ');
+        // Existente = o Sitra mostrou "Alterar". txtProprietarioId não serve: um CPF que só existe como
+        // motorista (EhMot) também preenche o id, e o Sitra o trata como proprietário novo.
+        const erro = await identificar('prop_cpf_cnpj', () => el('btnAlterar')?.getAttribute('type') === 'button', 'CPF/CNPJ');
         if (erro) return erro;
         definirSeTiver('prop_nome');
         await endereco(ENDERECO.proprietario);
@@ -155,7 +180,7 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
         return null;
       },
       async veiculo() {
-        const erro = await identificar('veic_placa', 'txtStatusVeiculo', 'Placa');
+        const erro = await identificar('veic_placa', () => !!(el('txtStatusVeiculo')?.value ?? '').trim(), 'Placa');
         if (erro) return erro;
         await definirEAguardar('veic_cpf_cnpj_prop');
         registrarModal();

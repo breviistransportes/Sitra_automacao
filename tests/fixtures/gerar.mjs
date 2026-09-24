@@ -8,7 +8,7 @@ import { camposDaTela } from '../../src/lib/campos.js';
 
 const PAGINAS = {
   motorista: { real: 'campos_necessarios/Cadastro De Motoristas.html', saida: 'tests/fixtures/sitra.html', extras: ['txtStatusMotorista', 'txtVeiculoMarcaModeloCor'] },
-  proprietario: { real: 'campos_necessarios/CadastroDeProprietarios.html', saida: 'tests/fixtures/proprietario.html', extras: ['txtProprietarioId'] },
+  proprietario: { real: 'campos_necessarios/CadastroDeProprietarios.html', saida: 'tests/fixtures/proprietario.html', extras: ['txtProprietarioId', 'btnCadastrar', 'btnAlterar'] },
   veiculo: { real: 'campos_necessarios/CadastroDeVeiculos.html', saida: 'tests/fixtures/veiculo.html', extras: ['txtStatusVeiculo', 'txtNomeProprietario', 'txtEixos', 'txtCapacidadeKg'] },
 };
 const MODAIS = ['ModalErro', 'ModalAsk'];

@@ -30,6 +30,8 @@
 <input type="text" id="txtContaCorrenteDigito" name="txtContaCorrenteDigito" class="form-control input-sm" maxlength="1">
 <select id="txtTpConta" name="txtTpConta" class="form-control input-sm"> <option value="1" selected="selected">CC - Conta Corrente</option> <option value="2">CP - Conta Poupança</option> </select>
 <input type="hidden" id="txtProprietarioId" name="txtProprietarioId">
+<input type="button" value="Cadastrar" id="btnCadastrar" class="btn btn-primary" onclick="SalvarProprietario()">
+<input type="hidden" value="Alterar" id="btnAlterar" class="btn btn-primary" onclick="EditarProprietario()">
 <div class="modal" id="ModalErro"><b id="erro"><br></b><button type="button" class="btn btn-primary pull-right" data-dismiss="modal" onclick="limpaModal()" id="btnOk">OK</button></div>
 <div class="modal" id="ModalAsk"><b id="pergunta" style="font-size:larger;"></b><input type="button" class="btn btn-primary" data-dismiss="modal" id="btnPerguntaSim" value="SIM"><input type="button" class="btn btn-primary" data-dismiss="modal" id="btnPerguntaNao" value="NÃO"></div>
 </body></html>
