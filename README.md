@@ -48,7 +48,9 @@ Precisa de [Node.js](https://nodejs.org) 20+: `npm install`, depois:
 
 ## Publicar uma versão nova
 
-1. Aumente `"version"` em `extensao/manifest.json` (ex.: `0.3.0`) e faça o commit.
-2. `git tag v0.3.0 && git push origin main v0.3.0`
-3. O GitHub Actions (`.github/workflows/release.yml`) roda os testes, gera o `.zip` e cria o Release.
-   Os computadores com a extensão passam a ver o aviso de atualização.
+1. Aumente `"version"` em `extensao/manifest.json` (ex.: `0.3.0`) e faça o commit/push em `main`.
+2. `npm test` e `npm run empacotar` (gera `cadastro-motorista-sitra.zip`).
+3. `gh release create v0.3.0 cadastro-motorista-sitra.zip --target main --title "v0.3.0" --notes "…"`
+
+Os computadores com a extensão passam a ver o aviso "Nova versão disponível".
+**Não** use o botão verde "Code → Download ZIP" para instalar: ele traz o código-fonte, sem a extensão montada.
