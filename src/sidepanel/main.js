@@ -23,6 +23,8 @@ function mensagem(texto, tipo = 'erro') {
   $('mensagem').textContent = texto;
   $('mensagem').className = tipo;
   $('mensagem').hidden = !texto;
+  // Com o painel rolado para baixo, a mensagem (no topo) ficaria fora de vista.
+  if (texto) $('mensagem').scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
 }
 
 function preencherLista(ul, itens) {
@@ -179,6 +181,10 @@ $('zona').addEventListener('dragover', (e) => { e.preventDefault(); $('zona').cl
 $('zona').addEventListener('dragleave', () => $('zona').classList.remove('ativa'));
 $('zona').addEventListener('drop', (e) => { e.preventDefault(); $('zona').classList.remove('ativa'); adicionar([...e.dataTransfer.files]); });
 $('seletor').addEventListener('change', (e) => { adicionar([...e.target.files]); e.target.value = ''; });
+// Área de arquivos acessível pelo teclado (Enter/Espaço abre o seletor).
+$('zona').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('seletor').click(); }
+});
 $('btn-ler').addEventListener('click', lerDocumentos);
 $('mensagens').addEventListener('input', atualizarBotaoLer);
 $('btn-preencher').addEventListener('click', (e) => { e.preventDefault(); preencherSitra(); });

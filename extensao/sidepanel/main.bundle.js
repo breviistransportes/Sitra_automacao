@@ -31113,6 +31113,7 @@ function mensagem(texto, tipo = "erro") {
   $("mensagem").textContent = texto;
   $("mensagem").className = tipo;
   $("mensagem").hidden = !texto;
+  if (texto) $("mensagem").scrollIntoView?.({ block: "nearest", behavior: "smooth" });
 }
 function preencherLista(ul, itens) {
   ul.innerHTML = "";
@@ -31269,6 +31270,12 @@ $("zona").addEventListener("drop", (e) => {
 $("seletor").addEventListener("change", (e) => {
   adicionar([...e.target.files]);
   e.target.value = "";
+});
+$("zona").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    $("seletor").click();
+  }
 });
 $("btn-ler").addEventListener("click", lerDocumentos);
 $("mensagens").addEventListener("input", atualizarBotaoLer);
