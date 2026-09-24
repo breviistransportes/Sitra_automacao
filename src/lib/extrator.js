@@ -1,10 +1,11 @@
-import { CAMPOS } from './campos.js';
-import { normalizarCampo, cpfValido } from './normalizar.js';
+import { CAMPOS, TELAS } from './campos.js';
+import { normalizarCampo, cpfValido, cpfCnpjValido } from './normalizar.js';
+import { aplicarRegras } from './regras.js';
 
 export const MODELO = 'gemini-3.8-flash';
 const URL_API = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:generateContent`;
 
-export const CAMPOS_IA = CAMPOS.filter(c => !c.soPadrao);
+export const CAMPOS_IA = CAMPOS.filter(c => c.ia);
 
 export class ErroExtracao extends Error {}
 
@@ -27,7 +28,22 @@ CNH / CNH-e:
 Outros documentos:
 - data_expedicao_rg só existe no próprio RG; nunca use datas da CNH para ele.
 - Endereço vem do comprovante de endereço (conta de luz, água, telefone etc.): endereco = só o logradouro, sem número; numero; complemento; bairro; cidade; uf; cep. Se o comprovante estiver em nome de outra pessoa, use o endereço e registre isso em avisos.
-- CRLV é documento do veículo: não use para dados pessoais.
+- CRV/CRLV é documento do veículo: não use para os dados pessoais do motorista.
+
+Proprietário (campos prop_*):
+- É o PROPRIETÁRIO que aparece no CRV/CRLV (nome e CPF ou CNPJ). Pode ser o próprio motorista, outra pessoa ou uma empresa.
+- RNTRC, data de emissão e validade vêm do cartão/certificado da ANTT (RNTRC com 8 ou 9 dígitos).
+- prop_rg / prop_org_exp: só se houver documento de identidade do proprietário.
+
+Veículo (campos veic_*), do CRV/CRLV:
+- veic_placa, veic_renavam (CÓDIGO RENAVAM), veic_chassi, veic_cor, veic_ano_fab, veic_ano_modelo.
+- MARCA/MODELO/VERSÃO: veic_marca = parte antes da "/", veic_modelo = o restante.
+- veic_certificado = número do CRV/CRLV (número do documento, não o RENAVAM).
+- veic_uf_registro / veic_cidade_registro = LOCAL de registro/emissão.
+- veic_tipo: escolha UMA das opções do Sitra pela ESPÉCIE/TIPO, CARROCERIA e eixos: CAMINHÃO TRATOR → "Cavalo";
+  SEMI-REBOQUE/REBOQUE → "Carreta" (ou Carreta6/7/9 conforme os eixos, se claro); caminhão de 3 eixos → "Truck";
+  caminhão de 2 eixos → "Toco"; menores (3/4, VUC, HR, VAN, Fiorino…) pelo modelo. Na dúvida, certeza "conferir".
+- veic_combustivel: escolha a opção do Sitra que corresponde ao COMBUSTÍVEL.
 - celular, fone_residencial e email: da conversa (inclusive o número de quem enviou, se aparecer no cabeçalho das mensagens) ou de documentos. Telefones com DDD.
 - estado_civil e nacionalidade: só se estiverem escritos em algum documento ou na conversa.
 
@@ -55,7 +71,10 @@ export function montarSchema() {
     properties: {
       campos: {
         type: 'object',
-        properties: Object.fromEntries(CAMPOS_IA.map(c => [c.chave, { ...campo, description: c.dica }])),
+        properties: Object.fromEntries(CAMPOS_IA.map(c => [c.chave, c.opcoes
+          // Campos de <select>: a IA escolhe entre os rótulos do Sitra ("" = não encontrado).
+          ? { ...campo, properties: { ...campo.properties, valor: { type: 'string', enum: [...c.opcoes.map(o => o[1]), ''] } }, description: c.dica }
+          : { ...campo, description: c.dica }])),
         required: CAMPOS_IA.map(c => c.chave),
         additionalProperties: false,
       },
@@ -127,7 +146,7 @@ export async function chamarGemini(apiKey, docs, fetchFn = fetch) {
   }
 }
 
-export function posProcessar(bruto, padroes) {
+export function posProcessar(bruto, padroes, { hoje = new Date() } = {}) {
   const valores = {};
   const avisos = [...(bruto?.avisos ?? [])];
   for (const campo of CAMPOS) {
@@ -135,7 +154,8 @@ export function posProcessar(bruto, padroes) {
     let valor = normalizarCampo(campo, b?.valor ?? '');
     let certeza = b?.certeza === 'alta' ? 'alta' : 'conferir';
     let fonte = b?.fonte ?? '';
-    if (b?.valor && !valor) avisos.push(`${campo.rotulo}: valor lido "${b.valor}" não está num formato válido`);
+    const nome = campo.tela === 'motorista' ? campo.rotulo : `${TELAS[campo.tela].rotulo} — ${campo.rotulo}`;
+    if (b?.valor && !valor) avisos.push(`${nome}: valor lido "${b.valor}" não está num formato válido`);
     if (!valor && campo.padrao && padroes?.[campo.padrao]) {
       valor = normalizarCampo(campo, padroes[campo.padrao]);
       certeza = 'alta';
@@ -151,5 +171,9 @@ export function posProcessar(bruto, padroes) {
     valores.cpf.certeza = 'conferir';
     avisos.push('CPF lido não passa na validação — confira');
   }
-  return { valores, avisos, documentos: bruto?.documentos_encontrados ?? [] };
+  if (valores.prop_cpf_cnpj.valor && !cpfCnpjValido(valores.prop_cpf_cnpj.valor)) {
+    valores.prop_cpf_cnpj.certeza = 'conferir';
+    avisos.push('CPF/CNPJ do proprietário não passa na validação — confira');
+  }
+  return { valores: aplicarRegras(valores, { hoje }), avisos, documentos: bruto?.documentos_encontrados ?? [] };
 }

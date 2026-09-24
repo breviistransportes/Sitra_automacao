@@ -44,6 +44,54 @@ describe('schema e partes', () => {
   });
 });
 
+describe('v2: proprietário e veículo', () => {
+  const padroes = { propriedade: '3', nacionalidade: 'BRASILEIRA' };
+
+  it('schema pede à IA só campos de documento, com opções do Sitra', () => {
+    const s = montarSchema();
+    const req = s.properties.campos.required;
+    expect(req).toContain('prop_cpf_cnpj');
+    expect(req).toContain('prop_rntrc');
+    expect(req).toContain('veic_chassi');
+    expect(req).not.toContain('prop_ie');
+    expect(req).not.toContain('prop_banco');
+    expect(req).not.toContain('veic_venc_ipva');
+    expect(s.properties.campos.properties.veic_tipo.properties.valor.enum).toContain('Cavalo');
+    expect(s.properties.campos.properties.veic_tipo.properties.valor.enum).toContain('');
+  });
+
+  it('instruções cobrem CRV/CRLV e cartão ANTT', () => {
+    expect(INSTRUCOES).toContain('CRV');
+    expect(INSTRUCOES).toContain('ANTT');
+    expect(INSTRUCOES).toContain('veic_tipo');
+  });
+
+  it('posProcessar aplica regras e padrões das telas novas', () => {
+    const r = posProcessar({
+      campos: {
+        cpf: { valor: '52998224725', certeza: 'alta', fonte: 'CNH' },
+        prop_cpf_cnpj: { valor: '11222333000181', certeza: 'alta', fonte: 'CRV.pdf' },
+        veic_tipo: { valor: 'Cavalo', certeza: 'conferir', fonte: 'CRV.pdf' },
+        veic_placa: { valor: 'oum6373', certeza: 'alta', fonte: 'CRV.pdf' },
+      },
+      documentos_encontrados: [], avisos: [],
+    }, padroes, { hoje: new Date(2026, 8, 24) });
+    expect(r.valores.prop_cpf_cnpj.valor).toBe('11.222.333/0001-81');
+    expect(r.valores.veic_tipo).toEqual({ valor: '8', certeza: 'conferir', fonte: 'CRV.pdf' });
+    expect(r.valores.prop_ie.valor).toBe('ISENTO');
+    expect(r.valores.prop_propriedade.valor).toBe('3');
+    expect(r.valores.veic_tipo_propriedade.valor).toBe('3');
+    expect(r.valores.veic_venc_ipva.valor).toBe('25/09/2026');
+    expect(r.valores.placa.valor).toBe('OUM-6373');
+  });
+
+  it('CNPJ do proprietário inválido vira "conferir" com aviso', () => {
+    const r = posProcessar({ campos: { prop_cpf_cnpj: { valor: '11222333000180', certeza: 'alta', fonte: 'CRV' } }, documentos_encontrados: [], avisos: [] }, padroes);
+    expect(r.valores.prop_cpf_cnpj.certeza).toBe('conferir');
+    expect(r.avisos).toContain('CPF/CNPJ do proprietário não passa na validação — confira');
+  });
+});
+
 describe('mensagens coladas pelo operador', () => {
   it('entram como texto antes do pedido final', () => {
     const p = montarPartes({ ...DOCS, mensagens: '  meu cel é 31 98888-7777, sou casado  ' });
