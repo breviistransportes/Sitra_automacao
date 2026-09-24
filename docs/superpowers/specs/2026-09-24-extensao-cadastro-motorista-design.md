@@ -171,3 +171,8 @@ Esperas com timeout (padrão 8 s) e mensagem clara se estourar.
   salvo nos contatos) — validar com um zip real.
 - ~~Autocomplete de cidade~~ — resolvido: texto livre (ver seção 2).
 - ~~Cópia local do Sitra~~ — salva em `campos_necessarios/Cadastro De Motoristas.html`.
+
+## 10. Resultado do teste manual (2026-09-24)
+
+Operador testou no Sitra real com documentos reais: **funcionou** ("deu certo ficou bom").
+Pedido seguinte: campo de texto livre para informações enviadas por mensagem (telefone etc.).
