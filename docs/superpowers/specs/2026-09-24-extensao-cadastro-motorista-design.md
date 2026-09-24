@@ -183,7 +183,7 @@ Pedido seguinte: campo de texto livre para informações enviadas por mensagem (
 e `/Veiculo/CadastroDeVeiculos`. O painel detecta qual das três telas está aberta e preenche só ela.
 Ordem de uso sugerida: Proprietário → Veículo → Motorista (o veículo exige o proprietário cadastrado).
 
-**Fontes:** proprietário = dono no CRLV/CRV (CPF ou CNPJ) + cartão ANTT (RNTRC, validade);
+**Fontes:** proprietário = transportador do cartão ANTT (nome, CPF/CNPJ, RNTRC, validade); o dono do CRLV/CRV só se não houver ANTT (ANTT prevalece, com aviso de divergência);
 veículo = CRV/CRLV (inclui o tipo do veículo); motorista ganha o campo Placa (= placa do veículo).
 
 **Regras (código, não IA):**
