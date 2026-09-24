@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   formatarCpf, cpfValido, formatarCep, formatarTelefone, formatarData, formatarUf,
   formatarEstadoCivil, formatarRg, formatarCategoria, formatarEmail, normalizarCampo,
+  formatarCpfCnpj, cnpjValido, cpfCnpjValido, formatarPlaca, formatarAno,
 } from '../src/lib/normalizar.js';
 import { CAMPO_POR_CHAVE } from '../src/lib/campos.js';
 
@@ -70,5 +71,39 @@ describe('normalizar', () => {
     expect(normalizarCampo(CAMPO_POR_CHAVE.propriedade, '3')).toBe('3');
     expect(normalizarCampo(CAMPO_POR_CHAVE.propriedade, 'Terceiro')).toBe('');
     expect(normalizarCampo(CAMPO_POR_CHAVE.celular, undefined)).toBe('');
+  });
+
+  it('CPF/CNPJ na máscara do Sitra', () => {
+    expect(formatarCpfCnpj('52998224725')).toBe('529.982.247-25');
+    expect(formatarCpfCnpj('11222333000181')).toBe('11.222.333/0001-81');
+    expect(formatarCpfCnpj('123')).toBe('');
+    expect(cnpjValido('11.222.333/0001-81')).toBe(true);
+    expect(cnpjValido('11.222.333/0001-80')).toBe(false);
+    expect(cpfCnpjValido('11.222.333/0001-81')).toBe(true);
+    expect(cpfCnpjValido('529.982.247-25')).toBe(true);
+  });
+
+  it('placa antiga e Mercosul em SSS-0A00', () => {
+    expect(formatarPlaca('oum6373')).toBe('OUM-6373');
+    expect(formatarPlaca('ABC 1D23')).toBe('ABC-1D23');
+    expect(formatarPlaca('AB1234')).toBe('');
+  });
+
+  it('ano com 4 dígitos e plausível', () => {
+    expect(formatarAno('2019')).toBe('2019');
+    expect(formatarAno('19')).toBe('');
+    expect(formatarAno('1800')).toBe('');
+  });
+
+  it('opção aceita id ou rótulo sem acento', () => {
+    expect(normalizarCampo(CAMPO_POR_CHAVE.veic_tipo, 'cavalo')).toBe('8');
+    expect(normalizarCampo(CAMPO_POR_CHAVE.veic_tipo, '8')).toBe('8');
+    expect(normalizarCampo(CAMPO_POR_CHAVE.veic_tipo, 'Caminhao')).toBe('1');
+    expect(normalizarCampo(CAMPO_POR_CHAVE.veic_combustivel, 'DIESEL S10')).toBe('9');
+    expect(normalizarCampo(CAMPO_POR_CHAVE.veic_tipo, 'CAMINHAO TRATOR')).toBe('');
+  });
+
+  it('chassi sem espaços, maiúsculo', () => {
+    expect(normalizarCampo(CAMPO_POR_CHAVE.veic_chassi, '9bm 958074 cb123456')).toBe('9BM958074CB123456');
   });
 });

@@ -85,6 +85,57 @@ export function formatarEmail(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : '';
 }
 
+export function formatarCnpj(v) {
+  const d = somenteDigitos(v);
+  return d.length === 14 ? `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}` : '';
+}
+
+export function cnpjValido(v) {
+  const d = somenteDigitos(v);
+  if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+  const digito = (n) => {
+    const pesos = n === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const soma = pesos.reduce((s, p, i) => s + Number(d[i]) * p, 0);
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  return digito(12) === Number(d[12]) && digito(13) === Number(d[13]);
+}
+
+// Máscara cpfCnpj do Sitra: 14 caracteres = CPF, 18 = CNPJ.
+export function formatarCpfCnpj(v) {
+  const d = somenteDigitos(v);
+  if (d.length === 11) return formatarCpf(d);
+  if (d.length === 14) return formatarCnpj(d);
+  return '';
+}
+
+export function cpfCnpjValido(v) {
+  const d = somenteDigitos(v);
+  return d.length === 14 ? cnpjValido(d) : cpfValido(d);
+}
+
+// Máscara do Sitra "SSS-0A00": placa antiga (ABC-1234) e Mercosul (ABC-1D23).
+export function formatarPlaca(v) {
+  const s = maiusculas(v).replace(/[^A-Z0-9]/g, '');
+  return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(s) ? `${s.slice(0, 3)}-${s.slice(3)}` : '';
+}
+
+export function formatarAno(v) {
+  const s = String(v ?? '').trim();
+  const n = Number(s);
+  return /^\d{4}$/.test(s) && n >= 1950 && n <= new Date().getFullYear() + 1 ? s : '';
+}
+
+// Aceita o id do <select> do Sitra ou o rótulo (sem diferenciar maiúsculas/acentos).
+function formatarOpcao(campo, v) {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  const chave = (x) => semAcento(maiusculas(x));
+  const achada = campo.opcoes.find(([id, rotulo]) => id === s || chave(rotulo) === chave(s));
+  return achada ? achada[0] : '';
+}
+
 export function normalizarCampo(campo, valor) {
   const cortar = (s) => (campo.max ? s.slice(0, campo.max) : s);
   switch (campo.tipo) {
@@ -98,6 +149,11 @@ export function normalizarCampo(campo, valor) {
     case 'categoria': return formatarCategoria(valor);
     case 'email': return cortar(formatarEmail(valor));
     case 'digitos': return cortar(somenteDigitos(valor));
+    case 'cpf_cnpj': return formatarCpfCnpj(valor);
+    case 'placa': return formatarPlaca(valor);
+    case 'ano': return formatarAno(valor);
+    case 'chassi': return cortar(maiusculas(valor).replace(/[^0-9A-Z]/g, ''));
+    case 'opcao': return formatarOpcao(campo, valor);
     case 'propriedade': return ['1', '2', '3'].includes(String(valor ?? '').trim()) ? String(valor).trim() : '';
     default: return cortar(maiusculas(valor));
   }

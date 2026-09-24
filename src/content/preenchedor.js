@@ -1,4 +1,4 @@
-import { CAMPOS, CAMPO_POR_CHAVE } from '../lib/campos.js';
+import { CAMPO_POR_CHAVE, camposDaTela } from '../lib/campos.js';
 
 const PESSOAIS = ['nome', 'data_nascimento', 'estado_civil', 'nome_pai', 'nome_mae', 'nacionalidade', 'propriedade', 'celular', 'fone_residencial', 'email'];
 const DOCUMENTACAO = ['rg', 'uf_exp', 'org_exp', 'data_expedicao_rg', 'registro_cnh', 'numero_espelho_cnh', 'data_primeira_cnh', 'data_emissao_cnh', 'data_validade_cnh', 'categoria_cnh'];
@@ -111,7 +111,7 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
 
     // 6. Conferência campo a campo.
     const campos = [];
-    for (const c of CAMPOS) {
+    for (const c of camposDaTela('motorista')) {
       const esperado = valores[c.chave] ?? '';
       const obtido = valorDe(c.chave);
       let status;
