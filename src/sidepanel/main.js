@@ -2,7 +2,11 @@ import { lerEntrada, prepararDocumentos, temConteudo } from '../lib/entrada.js';
 import { redimensionarImagem } from '../lib/imagem.js';
 import { chamarGemini, posProcessar } from '../lib/extrator.js';
 import { lerConfig } from '../lib/config.js';
-import { montarFormulario, lerFormulario } from './formulario.js';
+import { montarFormulario, lerFormulario, mostrarAba } from './formulario.js';
+import { TELAS, CAMPO_POR_CHAVE } from '../lib/campos.js';
+
+// Documento que identifica o cadastro em cada tela do Sitra.
+const DOCUMENTO = { motorista: 'cpf', proprietario: 'prop_cpf_cnpj', veiculo: 'veic_placa' };
 
 const $ = (id) => document.getElementById(id);
 let arquivos = [];
@@ -97,7 +101,7 @@ const STATUS = { ok: '✅', sitra: '🔵 veio do Sitra (CEP) —', falhou: '⚠�
 
 function mostrarRelatorio(rel) {
   $('resultado-titulo').textContent = rel.ok
-    ? 'Pronto! Confira a tela do Sitra e clique em "Cadastrar".'
+    ? `Pronto! Confira a tela de ${TELAS[rel.tela].rotulo} no Sitra e clique em "Cadastrar".`
     : `Parou: ${rel.erro}`;
   const linhas = [
     ...rel.avisos,
@@ -109,24 +113,28 @@ function mostrarRelatorio(rel) {
 
 async function preencherSitra() {
   mensagem('');
-  const { valores, invalidos, faltando } = lerFormulario($('form-conferencia'));
-  if (invalidos.length) { mensagem(`Formato inválido: ${invalidos.join(', ')}`); return; }
-  if (!valores.cpf) { mensagem('O CPF é obrigatório para preencher.'); return; }
-
   let est;
   try {
     est = await executarNoSitra(() => window.__cadastroMotorista.estado());
   } catch {
-    est = { naPagina: false };
+    est = { tela: null };
   }
-  if (!est?.naPagina) { mensagem('Abra a tela Cadastro de Motoristas do Sitra nesta aba.'); return; }
+  if (!est?.tela) { mensagem('Abra no Sitra a tela de Cadastro de Motorista, de Proprietário ou de Veículo nesta aba.'); return; }
+
+  const form = $('form-conferencia');
+  mostrarAba(form, est.tela);
+  const { valores, invalidos, faltando } = lerFormulario(form, est.tela);
+  const rotuloTela = TELAS[est.tela].rotulo;
+  if (invalidos.length) { mensagem(`Formato inválido (${rotuloTela}): ${invalidos.join(', ')}`); return; }
+  const doc = DOCUMENTO[est.tela];
+  if (!valores[doc]) { mensagem(`${CAMPO_POR_CHAVE[doc].rotulo} é obrigatório para preencher a tela de ${rotuloTela}.`); return; }
   if (!est.vazio && !confirmarSobrescrita) {
     confirmarSobrescrita = true;
     mensagem('O formulário do Sitra já tem dados. Clique em "Preencher no Sitra" de novo para sobrescrever, ou clique em "Limpar" no Sitra antes.', 'alerta');
     return;
   }
   confirmarSobrescrita = false;
-  if (faltando.length) mensagem(`Vai ficar faltando: ${faltando.join(', ')}`, 'alerta');
+  if (faltando.length) mensagem(`Vai ficar faltando (${rotuloTela}): ${faltando.join(', ')}`, 'alerta');
 
   $('btn-preencher').disabled = true;
   $('btn-preencher').textContent = 'Preenchendo…';
@@ -162,3 +170,7 @@ $('btn-voltar').addEventListener('click', () => { mensagem(''); mostrar('confere
 $('link-config').addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.openOptionsPage(); });
 $('form-conferencia').addEventListener('input', (e) => e.target.closest('label')?.classList.remove('conferir'));
 $('form-conferencia').addEventListener('submit', (e) => e.preventDefault());
+$('form-conferencia').addEventListener('click', (e) => {
+  const aba = e.target.closest('.aba');
+  if (aba) mostrarAba($('form-conferencia'), aba.dataset.tela);
+});

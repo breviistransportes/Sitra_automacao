@@ -22,3 +22,6 @@ legend { font-weight: 600; }
 #avisos li { color: #8a5a00; }
 #rotulo-mensagens { display: block; font-weight: 600; margin: 10px 0 4px; }
 #mensagens { width: 100%; box-sizing: border-box; padding: 6px; font: inherit; resize: vertical; margin-bottom: 8px; }
+.abas { display: flex; gap: 4px; margin-bottom: 8px; position: sticky; top: 0; background: var(--fundo); padding: 4px 0; }
+.aba { background: #eee; color: var(--texto); flex: 1; padding: 6px; }
+.aba.ativa { background: var(--laranja); color: #fff; }

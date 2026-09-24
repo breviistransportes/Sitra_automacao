@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { montarFormulario, lerFormulario } from '../src/sidepanel/formulario.js';
+import { montarFormulario, lerFormulario, mostrarAba } from '../src/sidepanel/formulario.js';
 import { CAMPOS } from '../src/lib/campos.js';
 
 const vazio = () => Object.fromEntries(CAMPOS.map(c => [c.chave, { valor: '', certeza: 'conferir', fonte: '' }]));
@@ -41,6 +41,33 @@ describe('formulário de conferência', () => {
     expect(valores.data_nascimento).toBe('01/02/1990');
     expect(valores.celular).toBe('(11)98765-4321');
     expect(valores.estado_civil).toBe('SOLTEIRO');
+  });
+
+  it('três abas: Motorista, Proprietário e Veículo; a primeira aberta', () => {
+    const f = renderizar(vazio());
+    expect([...f.querySelectorAll('.aba')].map(b => b.textContent)).toEqual(['Motorista', 'Proprietário', 'Veículo']);
+    expect(f.querySelector('[data-painel="motorista"]').hidden).toBe(false);
+    expect(f.querySelector('[data-painel="veiculo"]').hidden).toBe(true);
+    expect(f.querySelector('[data-painel="veiculo"] select[name="c_veic_tipo"] option[value="8"]').textContent).toBe('Cavalo');
+    expect(f.querySelector('[data-painel="proprietario"] select[name="c_prop_tipo_conta"]')).not.toBeNull();
+  });
+
+  it('mostrarAba troca a aba visível', () => {
+    const f = renderizar(vazio());
+    mostrarAba(f, 'veiculo');
+    expect(f.querySelector('[data-painel="veiculo"]').hidden).toBe(false);
+    expect(f.querySelector('[data-painel="motorista"]').hidden).toBe(true);
+    expect(f.querySelector('.aba[data-tela="veiculo"]').classList.contains('ativa')).toBe(true);
+  });
+
+  it('com a tela informada, inválidos e faltando são só daquela tela', () => {
+    const f = renderizar(vazio());
+    f.elements.c_data_nascimento.value = '31/02/1990';
+    f.elements.c_veic_ano_fab.value = '19';
+    const { invalidos, faltando } = lerFormulario(f, 'veiculo');
+    expect(invalidos).toEqual(['Ano Fab.']);
+    expect(faltando).toContain('Chassi');
+    expect(faltando).not.toContain('CPF');
   });
 
   it('lista inválidos e obrigatórios faltando', () => {
