@@ -1,0 +1,6 @@
+node_modules/
+extensao/**/*.bundle.js
+*.rar
+*.zip
+campos_necessarios/Cadastro De Motoristas*
+.superpowers/
