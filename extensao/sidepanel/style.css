@@ -1,0 +1,22 @@
+:root { --laranja: #e8710a; --amarelo: #fff4c2; --borda: #ccc; --texto: #222; --fundo: #fff; }
+body { font: 13px/1.4 system-ui, sans-serif; color: var(--texto); background: var(--fundo); margin: 0; padding: 12px; }
+h1 { font-size: 16px; margin: 0 0 12px; }
+#mensagem { padding: 8px; border-radius: 4px; }
+#mensagem.erro { background: #fde2e1; }
+#mensagem.alerta { background: var(--amarelo); }
+#zona { display: flex; flex-direction: column; gap: 4px; padding: 24px 12px; border: 2px dashed var(--borda); border-radius: 8px; text-align: center; cursor: pointer; }
+#zona.ativa { border-color: var(--laranja); background: #fff7ef; }
+#lista-arquivos, #avisos, #relatorio { padding-left: 16px; }
+#lista-arquivos li button { margin-left: 6px; border: 0; background: none; color: var(--texto); cursor: pointer; padding: 0 4px; }
+button { background: var(--laranja); color: #fff; border: 0; border-radius: 4px; padding: 8px 12px; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button.secundario { background: #888; }
+fieldset { border: 1px solid var(--borda); border-radius: 6px; margin: 0 0 10px; }
+legend { font-weight: 600; }
+.campo { display: grid; gap: 2px; margin-bottom: 6px; padding: 4px; border-radius: 4px; }
+.campo.conferir { background: var(--amarelo); }
+.campo input, .campo select { width: 100%; box-sizing: border-box; padding: 4px; }
+.campo small { color: #666; }
+.acoes { display: flex; gap: 8px; margin-top: 8px; }
+.carregando { font-style: italic; }
+#avisos li { color: #8a5a00; }

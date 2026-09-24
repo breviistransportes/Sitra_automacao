@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Configurações – Cadastro de Motorista</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; max-width: 480px; margin: 24px auto; padding: 0 16px; }
+    label { display: grid; gap: 4px; margin-bottom: 12px; }
+    input, select { padding: 6px; }
+    button { background: #e8710a; color: #fff; border: 0; border-radius: 4px; padding: 8px 12px; cursor: pointer; }
+    small { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Configurações</h1>
+  <label>Chave da API do Gemini
+    <input id="apiKey" type="password" autocomplete="off" placeholder="AIza...">
+    <small>Use uma chave de projeto com cobrança ativada: no plano gratuito o Google pode usar os documentos enviados.</small>
+  </label>
+  <label>Nacionalidade padrão
+    <input id="nacionalidade">
+  </label>
+  <label>Propriedade padrão
+    <select id="propriedade"><option value="1">Da Casa</option><option value="2">Agregado</option><option value="3">Terceiro</option></select>
+  </label>
+  <button id="salvar">Salvar</button>
+  <p id="status"></p>
+  <script type="module" src="main.bundle.js"></script>
+</body>
+</html>

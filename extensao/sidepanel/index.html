@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Cadastro de Motorista</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Cadastro de Motorista</h1>
+  <p id="mensagem" hidden></p>
+
+  <section data-etapa="entrada">
+    <label id="zona">
+      <strong>Solte aqui os documentos do motorista</strong>
+      <span>fotos, PDFs ou o .zip da conversa — ou clique para escolher</span>
+      <input id="seletor" type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.txt,.zip,.rar" hidden>
+    </label>
+    <ul id="lista-arquivos"></ul>
+    <button id="btn-ler" disabled>Ler documentos</button>
+    <a href="#" id="link-config">Configurações</a>
+  </section>
+
+  <section data-etapa="lendo" hidden>
+    <p class="carregando">Lendo documentos com a IA… (até 1 minuto)</p>
+  </section>
+
+  <section data-etapa="conferencia" hidden>
+    <p>Confira os campos. <span class="legenda">Amarelo = conferir.</span></p>
+    <ul id="avisos"></ul>
+    <form id="form-conferencia"></form>
+    <div class="acoes">
+      <button id="btn-preencher">Preencher no Sitra</button>
+      <button id="btn-recomecar" class="secundario">Recomeçar</button>
+    </div>
+  </section>
+
+  <section data-etapa="resultado" hidden>
+    <p id="resultado-titulo"></p>
+    <ul id="relatorio"></ul>
+    <div class="acoes">
+      <button id="btn-voltar" class="secundario">Voltar à conferência</button>
+      <button id="btn-novo">Próximo motorista</button>
+    </div>
+  </section>
+
+  <script type="module" src="main.bundle.js"></script>
+</body>
+</html>
