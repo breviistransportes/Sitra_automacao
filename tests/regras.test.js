@@ -84,4 +84,16 @@ describe('aplicarRegras', () => {
     aplicarRegras(v, { hoje: HOJE });
     expect(v.prop_ie.valor).toBe('');
   });
+
+  it('estado civil é sempre CASADO', () => {
+    expect(aplicarRegras(valores({}), { hoje: HOJE }).estado_civil).toEqual({ valor: 'CASADO', certeza: 'alta', fonte: 'regra' });
+    expect(aplicarRegras(valores({ estado_civil: 'SOLTEIRO' }), { hoje: HOJE }).estado_civil.valor).toBe('CASADO');
+  });
+
+  it('data de expedição do RG = data de emissão da CNH quando não houver outra', () => {
+    const r = aplicarRegras(valores({ data_emissao_cnh: '01/02/2023' }), { hoje: HOJE });
+    expect(r.data_expedicao_rg).toEqual({ valor: '01/02/2023', certeza: 'alta', fonte: 'CNH (data de emissão)' });
+    expect(aplicarRegras(valores({ data_emissao_cnh: '01/02/2023', data_expedicao_rg: '10/01/2005' }), { hoje: HOJE }).data_expedicao_rg.valor).toBe('10/01/2005');
+    expect(aplicarRegras(valores({}), { hoje: HOJE }).data_expedicao_rg.valor).toBe('');
+  });
 });

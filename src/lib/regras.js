@@ -20,6 +20,12 @@ export function aplicarRegras(valores, { hoje = new Date() } = {}) {
     if (v[origem]?.valor) definir(destino, v[origem].valor, 'motorista', v[origem].certeza);
   };
 
+  // Motorista: estado civil é sempre CASADO (regra do operador); expedição do RG = emissão da CNH se não houver RG.
+  definir('estado_civil', 'CASADO', 'regra');
+  if (!v.data_expedicao_rg?.valor && v.data_emissao_cnh?.valor) {
+    definir('data_expedicao_rg', v.data_emissao_cnh.valor, 'CNH (data de emissão)', v.data_emissao_cnh.certeza);
+  }
+
   // Proprietário: endereço sempre o do motorista.
   for (const [destino, origem] of ENDERECO) copiar(destino, origem);
 

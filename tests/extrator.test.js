@@ -131,6 +131,32 @@ describe('telefone e e-mail só das mensagens', () => {
   });
 });
 
+describe('a IA não pode inventar', () => {
+  it('nome do pai e da mãe sempre em amarelo, mesmo com certeza "alta"', () => {
+    const r = posProcessar({ campos: {
+      nome_pai: { valor: 'JOAO DA SILVA', certeza: 'alta', fonte: 'CNH-e.pdf' },
+      nome_mae: { valor: 'MARIA DA SILVA', certeza: 'alta', fonte: 'CNH-e.pdf' },
+    }, documentos_encontrados: [], avisos: [] }, { propriedade: '3', nacionalidade: 'BRASILEIRA' });
+    expect(r.valores.nome_pai.certeza).toBe('conferir');
+    expect(r.valores.nome_mae.certeza).toBe('conferir');
+  });
+
+  it('instruções proíbem inventar e mandam copiar letra por letra', () => {
+    expect(INSTRUCOES).toMatch(/NUNCA invente/);
+    expect(INSTRUCOES).toMatch(/letra por letra/);
+    expect(INSTRUCOES).toMatch(/nome_mae.*""/);
+  });
+});
+
+describe('filiação e datas da CNH', () => {
+  it('instruções: filiação tem pai e mãe; expedição do RG = emissão da CNH', () => {
+    expect(INSTRUCOES).toMatch(/FILIAÇÃO.*primeiro nome.*nome_pai/);
+    expect(INSTRUCOES).toMatch(/segundo.*nome_mae/);
+    expect(INSTRUCOES).not.toMatch(/nunca use datas da CNH/);
+    expect(INSTRUCOES).toMatch(/data_expedicao_rg.*DATA EMISSÃO/);
+  });
+});
+
 describe('mensagens coladas pelo operador', () => {
   it('entram como texto antes do pedido final', () => {
     const p = montarPartes({ ...DOCS, mensagens: '  meu cel é 31 98888-7777, sou casado  ' });
@@ -207,7 +233,7 @@ describe('posProcessar', () => {
     expect(r.valores.propriedade).toEqual({ valor: '3', certeza: 'alta', fonte: 'padrão' });
     expect(r.valores.nacionalidade).toEqual({ valor: 'BRASILEIRA', certeza: 'alta', fonte: 'padrão' });
     expect(r.valores.fone_residencial).toEqual({ valor: '(11)98765-4321', certeza: 'alta', fonte: 'igual ao celular' });
-    expect(r.valores.estado_civil).toEqual({ valor: '', certeza: 'conferir', fonte: '' });
+    expect(r.valores.estado_civil).toEqual({ valor: 'CASADO', certeza: 'alta', fonte: 'regra' });
     expect(r.documentos).toEqual(['CNH-e']);
     expect(r.avisos).toContain('comprovante em nome de terceiro');
     expect(Object.keys(r.valores).sort()).toEqual(CAMPOS.map(c => c.chave).sort());
