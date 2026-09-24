@@ -41,7 +41,7 @@ Baixe o `.zip`, extraia **por cima da mesma pasta** e, em `chrome://extensions`,
 Precisa de [Node.js](https://nodejs.org) 20+: `npm install`, depois:
 
 - `npm test` — testes (Vitest + jsdom).
-- `npm run build` — gera `extensao/**/main.bundle.js` e `extensao/content/injetado.bundle.js` (não versionados).
+- `npm run build` — gera `extensao/**/main.bundle.js` e `extensao/content/injetado.bundle.js`. **Esses arquivos ficam no git** (assim a pasta `extensao/` funciona até pelo "Download ZIP"): rode `npm run build` e faça commit deles junto com qualquer mudança em `src/`.
 - `node tests/fixtures/gerar.mjs` — regera as cópias de teste das telas a partir das páginas salvas do Sitra
   em `campos_necessarios/` (essas páginas ficam fora do git). Nunca edite as fixtures à mão.
 - Design e decisões: `docs/superpowers/specs/`. Planos: `docs/superpowers/plans/`.
