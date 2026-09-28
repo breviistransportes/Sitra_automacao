@@ -1,4 +1,4 @@
-# Sitra automação — Cadastro de Motorista, Proprietário e Veículo
+# Automação Sitra — Cadastros e CT-e manual
 
 Extensão do Google Chrome que lê os documentos do motorista (CNH, cartão ANTT, CRV/CRLV,
 comprovante de endereço, fotos/PDFs soltos ou o `.zip` da conversa do WhatsApp) com a IA do
@@ -6,6 +6,7 @@ Google Gemini e preenche as telas de cadastro do **Sitra Web Revolution**:
 
 - **Proprietário** → **Veículo** → **Motorista** (nessa ordem: o veículo precisa do proprietário cadastrado).
 - A extensão **nunca clica em "Cadastrar"**: ela preenche, mostra um relatório campo a campo e o operador confere e salva.
+- **CT-e manual** → lê a nota, prepara os participantes e adiciona a NF-e/NF na Digitação de CT-e, sem emitir nem cadastrar.
 
 ## Instalar num computador (sem instalar nada além do Chrome)
 
@@ -35,6 +36,16 @@ Baixe o `.zip`, extraia **por cima da mesma pasta** e, em `chrome://extensions`,
 3. **Ler documentos** → confira as abas **Motorista / Proprietário / Veículo** (amarelo = conferir).
 4. No Sitra, abra a tela (Proprietário, depois Veículo, depois Motorista) e clique em **Preencher no Sitra**.
 5. Confira a tela do Sitra e clique em **Cadastrar**.
+
+### Usar o modo CT-e manual
+
+1. No painel, selecione **CT-e manual**, anexe a foto ou o PDF da nota e clique em **Ler nota**.
+2. Confira tudo que foi lido. Informe o CPF do motorista e selecione o tomador; expedidor e recebedor ficam em branco para preenchimento manual quando necessários.
+3. No Sitra, abra **Digitação de CT-e** e escolha manualmente o **Tipo de Frete**.
+4. Clique em **Preencher CT-e**. A extensão usa os dois primeiros CNPJs como remetente e destinatário, mantém **NF-e/NF**, põe o protocolo de autorização em **Chave NF-e**, usa o primeiro CFOP legível, seleciona **CONFORME NOTA**, informa **VOL** e marca **Frete Combinado**.
+5. Complete manualmente o responsável pelo frete combinado, expedidor/recebedor quando aplicável, placas e qualquer campo que ficou vazio. Confira tudo antes de decidir se deve cadastrar.
+
+O modo CT-e não escolhe o Tipo de Frete, não preenche placas ou responsável e nunca aciona **Cadastrar**.
 
 ## Desenvolvimento
 

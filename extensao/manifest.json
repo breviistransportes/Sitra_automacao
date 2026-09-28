@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Cadastro de Motorista – Sitra",
-  "version": "0.5.1",
-  "description": "Lê os documentos do motorista com IA e preenche o cadastro no Sitra Web Revolution.",
+  "name": "Automação Sitra",
+  "version": "0.6.0",
+  "description": "Lê documentos com IA e preenche cadastros e a Digitação manual de CT-e no Sitra Web Revolution.",
   "permissions": ["sidePanel", "storage", "scripting"],
   "host_permissions": ["https://2323.aleff.com.br/*", "https://generativelanguage.googleapis.com/*"],
   "background": { "service_worker": "background.js" },
   "side_panel": { "default_path": "sidepanel/index.html" },
   "options_page": "options/options.html",
-  "action": { "default_title": "Cadastro de Motorista" }
+  "action": { "default_title": "Automação Sitra" }
 }
