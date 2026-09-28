@@ -3,7 +3,7 @@
 // Nunca digite a fixture à mão: foi assim que o "onchange" errado da v1 passou nos testes.
 // Uso: node tests/fixtures/gerar.mjs   (as páginas salvas ficam fora do git)
 import { JSDOM } from 'jsdom';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { camposDaTela } from '../../src/lib/campos.js';
 
 const PAGINAS = {
@@ -31,4 +31,32 @@ for (const [tela, { real, saida, extras }] of Object.entries(PAGINAS)) {
   }
   writeFileSync(saida, `<!doctype html>\n<!-- GERADO por tests/fixtures/gerar.mjs a partir de ${real} — não editar à mão -->\n<html><body>\n${linhas.join('\n')}\n</body></html>\n`);
   console.log(`${saida}: ${linhas.length} elementos`);
+}
+
+const IDS_CTE = [
+  'txtTipoFrete', 'txtRemetenteCpfCnpj', 'txtDestinatarioCpfCnpj', 'txtExpedidorCpfCnpj', 'txtRecebedorCpfCnpj',
+  'txtTomadorCpfCnpj', 'txtMercadoriasTransportadasProduto', 'txtMercadoriasTransportadasEspecie',
+  'btnMercadoriasTransportadasNotasFiscais', 'ModalNotasFiscais', 'rdbNF', 'txtNotasFiscaisChaveNfe',
+  'txtNotasFiscaisNotaFiscal', 'txtNotasFiscaisSerie', 'txtNotasFiscaisCfop', 'txtNotasFiscaisValorMerc',
+  'txtNotasFiscaisVolume', 'txtNotasFiscaisPeso', 'txtNotasFiscaisDataEmissao', 'btnNotasFiscaisAdd',
+  'divPartialNotasFiscais', 'txtMotoristaCpf', 'chkFreteCombinado', 'ModalFreteCombinadoResponsavel',
+  'txtFreteCombinadoResponsavel', 'btnCadastrar',
+];
+const realCte = ['DigitacaoDeCT-e.html', 'campos_necessarios/DigitacaoDeCT-e.html'].find(existsSync);
+if (realCte) {
+  const doc = new JSDOM(readFileSync(realCte, 'utf8')).window.document;
+  const modalIds = new Set(['ModalNotasFiscais', 'ModalFreteCombinadoResponsavel']);
+  const descendentesDeModal = new Set(IDS_CTE.filter(id => {
+    const e = doc.getElementById(id);
+    return e && [...modalIds].some(mid => id !== mid && e.closest(`#${mid}`));
+  }));
+  const linhas = IDS_CTE.filter(id => !descendentesDeModal.has(id)).map(id => {
+    const el = doc.getElementById(id);
+    if (!el) throw new Error(`cte: #${id} não existe na página salva`);
+    if (!modalIds.has(id)) return el.outerHTML.replace(/\s+/g, ' ');
+    const filhos = IDS_CTE.filter(fid => doc.getElementById(fid)?.closest(`#${id}`)).map(fid => doc.getElementById(fid).outerHTML.replace(/\s+/g, ' ')).join('');
+    return `<div class="${el.className}" id="${id}" style="display:none">${filhos}</div>`;
+  });
+  writeFileSync('tests/fixtures/cte.html', `<!doctype html>\n<!-- GERADO por tests/fixtures/gerar.mjs a partir de ${realCte} — não editar à mão -->\n<html><body>\n${linhas.join('\n')}\n</body></html>\n`);
+  console.log(`tests/fixtures/cte.html: ${linhas.length} elementos raiz`);
 }
