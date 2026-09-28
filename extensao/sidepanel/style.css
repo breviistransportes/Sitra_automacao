@@ -69,6 +69,15 @@ section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 /* Grid e fieldset não encolhem abaixo do conteúdo por padrão: força caber na largura do painel. */
 .conteudo > *, section > *, fieldset, .campo, .campo > * { min-width: 0; }
 
+.seletor-modo {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+}
+.modo { color: var(--muted); background: transparent; min-height: 32px; }
+.modo:hover:not(:disabled) { color: var(--text); background: transparent; }
+.modo.ativo { color: var(--on-accent); background: var(--accent); }
+.modo.ativo:hover:not(:disabled) { background: var(--accent-hover); }
+
 /* Botões */
 button {
   min-height: 36px; padding: 0 14px;
