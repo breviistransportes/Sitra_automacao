@@ -136,7 +136,7 @@ export function chamarGeminiConferencia(apiKey, docs, fetchFn = fetch) {
   return gerar(apiKey, docs, { modelo: MODELO_CONFERENCIA, instrucoes: INSTRUCOES_CONFERENCIA, schema: schemaConferencia() }, fetchFn);
 }
 
-async function gerar(apiKey, docs, { modelo, instrucoes, schema }, fetchFn) {
+export async function gerar(apiKey, docs, { modelo, instrucoes, schema }, fetchFn) {
   let resposta;
   try {
     resposta = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
