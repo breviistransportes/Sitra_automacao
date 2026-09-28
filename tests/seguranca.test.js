@@ -5,6 +5,8 @@ import { CAMPO_POR_CHAVE, valoresDaTela, ehSitra } from '../src/lib/campos.js';
 import { posProcessar, montarPartes, INSTRUCOES } from '../src/lib/extrator.js';
 import { lerEntrada } from '../src/lib/entrada.js';
 import { linkAtualizacaoValido } from '../src/lib/versao.js';
+import { montarSchemaCte } from '../src/lib/extrator-cte.js';
+import { CAMPOS_CTE } from '../src/lib/campos-cte.js';
 
 const padroes = { propriedade: '3', nacionalidade: 'BRASILEIRA' };
 const bruto = (campos) => ({ campos, documentos_encontrados: [], avisos: [] });
@@ -113,5 +115,14 @@ describe('Baixo 2 — link de atualização', () => {
     expect(linkAtualizacaoValido('v0.3.0', 'https://evil.com/breviistransportes/Sitra_automacao/releases/')).toBe(false);
     expect(linkAtualizacaoValido('v0.3.0', 'https://github.com/outro/Sitra_automacao/releases/tag/v0.3.0')).toBe(false);
     expect(linkAtualizacaoValido('0.3.0<script>', 'https://github.com/breviistransportes/Sitra_automacao/releases/tag/x')).toBe(false);
+  });
+});
+
+describe('CT-e — isolamento dos dados', () => {
+  it('schema da IA contém somente campos próprios do CT-e', () => {
+    const permitidos = new Set([...CAMPOS_CTE.filter(c => c.ia).map(c => c.chave).filter(k => k !== 'cfop'), 'cfops', 'outros_cnpjs']);
+    expect(Object.keys(montarSchemaCte().properties.campos.properties).every(k => permitidos.has(k))).toBe(true);
+    expect(montarSchemaCte().properties.campos.properties).not.toHaveProperty('registro_cnh');
+    expect(montarSchemaCte().properties.campos.properties).not.toHaveProperty('veic_placa');
   });
 });

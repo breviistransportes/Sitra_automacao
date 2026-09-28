@@ -9,11 +9,15 @@
 </head>
 <body>
   <header class="topo">
-    <h1>Cadastro de Motorista</h1>
-    <p class="subtitulo">Leitura de documentos e preenchimento do Sitra</p>
+    <h1 id="titulo-painel">Cadastro de Motorista</h1>
+    <p id="subtitulo-painel" class="subtitulo">Leitura de documentos e preenchimento do Sitra</p>
   </header>
 
   <main class="conteudo">
+    <div class="seletor-modo" role="tablist" aria-label="Tipo de automação">
+      <button type="button" class="modo ativo" data-modo="cadastro" aria-selected="true">Cadastros</button>
+      <button type="button" class="modo" data-modo="cte" aria-selected="false">CT-e manual</button>
+    </div>
     <p id="atualizacao" hidden><a id="link-atualizacao" target="_blank" rel="noopener"></a></p>
     <p id="mensagem" role="status" aria-live="polite" hidden></p>
 
@@ -46,12 +50,12 @@
         <span class="zona-icone" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
         </span>
-        <strong>Solte aqui os documentos do motorista</strong>
-        <span>fotos, PDFs ou o .zip da conversa — ou clique para escolher</span>
+        <strong id="titulo-upload">Solte aqui os documentos do motorista</strong>
+        <span id="texto-upload">fotos, PDFs ou o .zip da conversa — ou clique para escolher</span>
         <input id="seletor" type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.txt,.zip,.rar" hidden>
       </label>
       <ul id="lista-arquivos" aria-label="Arquivos selecionados"></ul>
-      <div class="bloco-mensagens">
+      <div id="bloco-mensagens" class="bloco-mensagens">
         <label id="rotulo-mensagens" for="mensagens">Informações adicionais</label>
         <textarea id="mensagens" rows="5" placeholder="Cole aqui as mensagens do motorista (telefone, e-mail, estado civil…)"></textarea>
       </div>
@@ -74,7 +78,7 @@
     <section data-etapa="conferencia" hidden>
       <div class="instrucoes">
         <p><strong>Confira os campos.</strong> Os marcados <span class="legenda">conferir</span> (em amarelo) precisam ser checados.</p>
-        <p><small>Ordem no Sitra: Proprietário → Veículo → Motorista. Abra a tela e clique em "Preencher".</small></p>
+        <p><small id="instrucao-preenchimento">Ordem no Sitra: Proprietário → Veículo → Motorista. Abra a tela e clique em "Preencher".</small></p>
       </div>
       <ul id="avisos" aria-label="Avisos"></ul>
       <form id="form-conferencia"></form>

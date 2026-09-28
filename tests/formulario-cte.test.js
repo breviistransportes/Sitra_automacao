@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { montarFormularioCte, lerFormularioCte } from '../src/sidepanel/formulario-cte.js';
 
 const valores = {
@@ -10,6 +11,13 @@ const valores = {
 };
 
 describe('formulário CT-e', () => {
+  it('painel oferece os dois modos e textos específicos', () => {
+    const html = readFileSync('extensao/sidepanel/index.html', 'utf8');
+    expect(html).toContain('data-modo="cadastro"');
+    expect(html).toContain('data-modo="cte"');
+    expect(html).toContain('CT-e manual');
+    expect(html).toContain('id="btn-preencher"');
+  });
   it('mostra extraídos, manuais, tomador e amarelo', () => {
     document.body.innerHTML = `<form id="f">${montarFormularioCte(valores)}</form>`;
     const f = document.getElementById('f');

@@ -1,10 +1,12 @@
 import { lerEntrada, prepararDocumentos, temConteudo } from '../lib/entrada.js';
 import { redimensionarImagem } from '../lib/imagem.js';
 import { chamarGemini, chamarGeminiConferencia, posProcessar } from '../lib/extrator.js';
+import { chamarGeminiCte, posProcessarCte } from '../lib/extrator-cte.js';
 import { textoDoPdf } from '../lib/pdf.js';
 import { camposDivergentes } from '../lib/conferencia.js';
 import { lerConfig, salvarConfig } from '../lib/config.js';
 import { montarFormulario, lerFormulario, mostrarAba } from './formulario.js';
+import { montarFormularioCte, lerFormularioCte } from './formulario-cte.js';
 import { versaoMaior, linkAtualizacaoValido } from '../lib/versao.js';
 import { TELAS, CAMPO_POR_CHAVE, ehSitra, valoresDaTela } from '../lib/campos.js';
 
@@ -14,6 +16,7 @@ const DOCUMENTO = { motorista: 'cpf', proprietario: 'prop_cpf_cnpj', veiculo: 'v
 const $ = (id) => document.getElementById(id);
 let arquivos = [];
 let confirmarSobrescrita = false;
+let modo = 'cadastro';
 
 function mostrar(etapa) {
   for (const s of document.querySelectorAll('section[data-etapa]')) s.hidden = s.dataset.etapa !== etapa;
@@ -81,6 +84,15 @@ async function lerDocumentos() {
     if (!temConteudo(docs, docs.mensagens)) {
       throw new Error(['Nenhuma foto/PDF encontrada e nenhuma mensagem colada.', ...avisosEntrada].join(' '));
     }
+    if (modo === 'cte') {
+      const r = posProcessarCte(await chamarGeminiCte(cfg.apiKey, docs));
+      $('form-conferencia').innerHTML = montarFormularioCte(r.valores);
+      const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(', ')}`] : [];
+      preencherLista($('avisos'), [...docsLidos, ...avisosEntrada, ...r.avisos]);
+      confirmarSobrescrita = false;
+      mostrar('conferencia');
+      return;
+    }
     // Telefone/e-mail só são aceitos se estiverem escritos nas mensagens/conversas enviadas.
     const textoConfiavel = [docs.mensagens ?? '', ...docs.textos.map(t => t.conteudo)].join('\n');
     // Duas leituras em paralelo: a completa e a conferência dos números da CNH (modelo mais forte).
@@ -120,7 +132,10 @@ async function executarNoSitra(func, args = []) {
 const STATUS = { ok: '✅', sitra: '🔵 veio do Sitra (CEP) —', falhou: '⚠️ não gravou —', vazio: '⚠️ obrigatório vazio —' };
 
 function mostrarRelatorio(rel) {
-  $('resultado-titulo').textContent = rel.ok
+  const sucessoCte = rel.ok && rel.tela === 'cte';
+  $('resultado-titulo').textContent = sucessoCte
+    ? 'Pronto! Confira a Digitação de CT-e, informe o responsável pelo frete combinado e só então decida se deve cadastrar.'
+    : rel.ok
     ? `Pronto! Confira a tela de ${TELAS[rel.tela].rotulo} no Sitra e clique em "Cadastrar".`
     : `Parou: ${rel.erro}`;
   const linhas = [
@@ -133,6 +148,25 @@ function mostrarRelatorio(rel) {
 
 async function preencherSitra() {
   mensagem('');
+  if (modo === 'cte') {
+    let est;
+    try { est = await executarNoSitra(() => window.__cteManual.estado()); } catch { est = { tela: null }; }
+    if (!est?.tela) { mensagem('Abra no Sitra a tela Digitação de CT-e e escolha o Tipo de Frete.'); return; }
+    const { valores, invalidos, faltando } = lerFormularioCte($('form-conferencia'));
+    if (invalidos.length) { mensagem(`Formato inválido: ${invalidos.join(', ')}`); return; }
+    if (faltando.length) { mensagem(`Preencha antes de continuar: ${faltando.join(', ')}`); return; }
+    $('btn-preencher').disabled = true;
+    $('btn-preencher').textContent = 'Preenchendo…';
+    try {
+      mostrarRelatorio(await executarNoSitra(v => window.__cteManual.preencher(v), [valores]));
+    } catch (e) {
+      mensagem(`Falha ao preencher: ${e.message}`);
+    } finally {
+      $('btn-preencher').disabled = false;
+      $('btn-preencher').textContent = 'Preencher CT-e';
+    }
+    return;
+  }
   let est;
   try {
     est = await executarNoSitra(() => window.__cadastroMotorista.estado());
@@ -173,8 +207,29 @@ function recomecar() {
   $('mensagens').value = '';
   listarArquivos();
   mensagem('');
-  $('btn-ler').textContent = 'Ler documentos';
+  $('btn-ler').textContent = modo === 'cte' ? 'Ler nota' : 'Ler documentos';
   mostrar('entrada');
+}
+
+function aplicarModo(novoModo) {
+  modo = novoModo === 'cte' ? 'cte' : 'cadastro';
+  for (const botao of document.querySelectorAll('[data-modo]')) {
+    const ativo = botao.dataset.modo === modo;
+    botao.classList.toggle('ativo', ativo);
+    botao.setAttribute('aria-selected', String(ativo));
+  }
+  const cte = modo === 'cte';
+  $('titulo-painel').textContent = cte ? 'CT-e manual' : 'Cadastro de Motorista';
+  $('subtitulo-painel').textContent = cte ? 'Leitura da nota e preenchimento assistido no Sitra' : 'Leitura de documentos e preenchimento do Sitra';
+  $('titulo-upload').textContent = cte ? 'Solte aqui a nota do CT-e' : 'Solte aqui os documentos do motorista';
+  $('texto-upload').textContent = cte ? 'foto ou PDF — ou clique para escolher' : 'fotos, PDFs ou o .zip da conversa — ou clique para escolher';
+  $('bloco-mensagens').hidden = cte;
+  $('instrucao-preenchimento').textContent = cte
+    ? 'No Sitra, abra Digitação de CT-e e escolha o Tipo de Frete antes de preencher.'
+    : 'Ordem no Sitra: Proprietário → Veículo → Motorista. Abra a tela e clique em "Preencher".';
+  $('btn-preencher').textContent = cte ? 'Preencher CT-e' : 'Preencher no Sitra';
+  $('btn-novo').textContent = cte ? 'Próximo CT-e' : 'Próximo motorista';
+  recomecar();
 }
 
 $('zona').addEventListener('dragover', (e) => { e.preventDefault(); $('zona').classList.add('ativa'); });
@@ -200,6 +255,7 @@ $('form-conferencia').addEventListener('click', (e) => {
   const aba = e.target.closest('.aba');
   if (aba) mostrarAba($('form-conferencia'), aba.dataset.tela);
 });
+for (const botao of document.querySelectorAll('[data-modo]')) botao.addEventListener('click', () => aplicarModo(botao.dataset.modo));
 
 // Aviso de versão nova publicada no GitHub (Releases). Sem internet ou sem release: não mostra nada.
 async function verificarAtualizacao() {
