@@ -41,11 +41,15 @@ function criarSitraCte({ url = 'https://2323.aleff.com.br/DigitacaoCte2/Digitaca
     });
   }
   // Bootstrap: .modal('hide') fecha o modal de notas (o Sitra soma as notas no hide.bs.modal).
+  // Depois da soma, o Sitra roda Cte.CalculaTabelas só com Frete Combinado desmarcado:
+  // pergunta "Cobrar Taxa de Coleta?" (#ModalAskCte) ou PreenherCalculoFrete, que desmarca o combinado.
   win.jQuery = (sel) => ({ modal: (acao) => {
     if (sel === '#ModalNotasFiscais' && acao === 'hide') {
       ordem.push('fechar-notas');
       const m = doc.getElementById('ModalNotasFiscais');
       m.style.display = 'none'; m.classList.remove('in');
+      const combinado = doc.getElementById('chkFreteCombinado');
+      if (!combinado.checked) abrirModal('ModalAskCte', 'perguntaCte', 'Cobrar Taxa de Coleta R$10,00?');
     }
   } });
   doc.getElementById('txtDestinatarioCpfCnpj').addEventListener('blur', () => {
@@ -97,13 +101,14 @@ describe('preenchedor de CT-e', () => {
     doc.getElementById('txtTipoFrete').value = '1';
     const rel = await p.preencher(VALORES_CTE);
     expect(rel.ok).toBe(true);
-    expect(ordem).toEqual(['remetente', 'destinatario', 'aliquota', 'abrir-notas', 'consulta-chave', 'inserir-nota', 'fechar-notas', 'frete-combinado']);
+    expect(ordem).toEqual(['remetente', 'destinatario', 'aliquota', 'abrir-notas', 'consulta-chave', 'inserir-nota', 'frete-combinado', 'fechar-notas']);
     expect(doc.getElementById('txtNotasFiscaisChaveNfe').value).toBe('35260929124070000100550000000078311000007833');
     expect(doc.getElementById('txtNotasFiscaisSerie').value).toBe('1');
     expect(doc.getElementById('txtNotasFiscaisCfop').value).toBe('5102');
     expect(doc.getElementById('txtMercadoriasTransportadasProduto').selectedOptions[0].text).toBe('CONFORME NOTA');
     expect(doc.getElementById('txtMercadoriasTransportadasEspecie').value).toBe('VOL');
     expect(doc.getElementById('chkFreteCombinado').checked).toBe(true);
+    expect(doc.getElementById('ModalAskCte').classList.contains('in')).toBe(false);
     expect(doc.getElementById('txtAliquotaICMS').value).toBe('12,00');
     expect(rel.avisos.join(' ')).toMatch(/Deseja incluir ICMS/);
     expect(rel.avisos.join(' ')).toMatch(/respons[aá]vel/i);
