@@ -377,7 +377,7 @@
       }
     };
   }
-  function criarPreenchedorCte(win, { timeoutMs = 8e3, intervaloMs = 100 } = {}) {
+  function criarPreenchedorCte(win, { timeoutMs = 8e3, intervaloMs = 100, calmaMs = 1500 } = {}) {
     instalarContadorXhr2(win);
     const doc = win.document;
     const elemento = (id) => doc.getElementById(id);
@@ -402,6 +402,16 @@
       while (Date.now() < fim) {
         ocioso = pendentes() > 0 ? 0 : ocioso + 1;
         if (ocioso >= 2) return;
+        await esperar(intervaloMs);
+      }
+      throw new Error(`${etapa}: o Sitra demorou demais para responder.`);
+    }
+    async function esperarCalma(etapa) {
+      const fim = Date.now() + Math.max(timeoutMs, calmaMs * 4);
+      let desde = Date.now();
+      while (Date.now() < fim) {
+        if (pendentes() > 0) desde = Date.now();
+        else if (Date.now() - desde >= calmaMs) return;
         await esperar(intervaloMs);
       }
       throw new Error(`${etapa}: o Sitra demorou demais para responder.`);
@@ -511,25 +521,25 @@
           return agora !== antes && (!!grade?.querySelector("tr") || !!agora.trim());
         });
         campos.push({ rotulo: "Nota fiscal", status: "ok", obtido: valores.numero_nota || valores.chave_acesso });
-        if (valores.motorista_cpf) {
-          atribuir("txtMotoristaCpf", valores.motorista_cpf, "blur");
-          await esperarSitra("Motorista");
-          verificarBloqueio("Motorista");
-        }
+        win.jQuery?.("#ModalNotasFiscais")?.modal?.("hide");
+        await esperarCondicao("Fechar Notas e Outros", () => !modalVisivel("ModalNotasFiscais"));
+        await esperarCalma("Somar notas");
+        const perguntaTabela = modalVisivel("ModalAskCte") ? mensagemBloqueio() : null;
+        if (!perguntaTabela) verificarBloqueio("Somar notas");
         const combinado = elemento("chkFreteCombinado");
         if (!combinado) throw new Error("A op\xE7\xE3o Frete Combinado n\xE3o existe mais na tela do Sitra.");
         if (combinado.disabled) throw new Error("Frete Combinado est\xE1 desabilitado no Sitra (CT-e vinculado a cota\xE7\xE3o?) \u2014 marque manualmente.");
         if (!combinado.checked) combinado.click();
         await esperarCondicao("Marcar Frete Combinado", () => combinado.checked);
-        const pergunta = mensagemBloqueio();
-        win.jQuery?.("#ModalNotasFiscais")?.modal?.("hide");
-        await esperarCondicao("Fechar Notas e Outros", () => !modalVisivel("ModalNotasFiscais"));
-        await esperarSitra("Somar notas");
-        const depois = mensagemBloqueio();
-        if (depois && depois !== pergunta) throw new Error(`Somar notas: ${depois} \u2014 resolva no Sitra antes de continuar.`);
-        if (!combinado.checked) throw new Error("O Sitra desmarcou o Frete Combinado depois de somar as notas \u2014 marque de novo manualmente.");
+        const perguntaIcms = modalVisivel("ModalAsk") ? elemento("pergunta")?.textContent.replace(/\s+/g, " ").trim() : null;
+        if (valores.motorista_cpf) {
+          atribuir("txtMotoristaCpf", valores.motorista_cpf, "blur");
+          await esperarSitra("Motorista");
+          if (modalVisivel("ModalErro")) verificarBloqueio("Motorista");
+        }
+        if (!combinado.checked) throw new Error("O Sitra desmarcou o Frete Combinado \u2014 marque de novo manualmente.");
         campos.push({ rotulo: "Frete Combinado", status: "ok", obtido: "marcado" });
-        if (pergunta) avisos.push(`O Sitra perguntou: "${pergunta}" \u2014 responda na tela.`);
+        for (const p of [perguntaTabela, perguntaIcms]) if (p) avisos.push(`O Sitra perguntou: "${p}" \u2014 responda na tela.`);
         avisos.push("Informe frete peso, frete valor, o respons\xE1vel pelo frete combinado e os campos manuais antes de cadastrar.");
         return { ok: true, tela: "cte", avisos, campos };
       } catch (e) {

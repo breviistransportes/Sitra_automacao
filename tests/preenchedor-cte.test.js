@@ -59,6 +59,7 @@ function criarSitraCte({ url = 'https://2323.aleff.com.br/DigitacaoCte2/Digitaca
   doc.getElementById('btnMercadoriasTransportadasNotasFiscais').addEventListener('click', () => {
     ordem.push('abrir-notas');
     doc.getElementById('ModalNotasFiscais').style.display = 'block';
+    doc.getElementById('chkFreteCombinado').checked = false; // relato do operador: entrar em Notas desmarca o combinado
   });
   // onblur="Cte.ConsultaChaveNotasFiscais(event)": o Sitra preenche nº/série pela chave e os desabilita.
   doc.getElementById('txtNotasFiscaisChaveNfe').addEventListener('blur', () => {
@@ -78,8 +79,9 @@ function criarSitraCte({ url = 'https://2323.aleff.com.br/DigitacaoCte2/Digitaca
     const s = parseFloat(doc.getElementById('txtAliquotaICMS').value.replace(',', '.')) || 0;
     if (doc.getElementById('chkFreteCombinado').checked && s !== 0) abrirModal('ModalAsk', 'pergunta', 'Deseja incluir ICMS');
   });
+  doc.getElementById('txtMotoristaCpf').addEventListener('blur', () => { ordem.push('motorista'); });
   doc.getElementById('btnCadastrar').addEventListener('click', () => { cliques.cadastrar++; });
-  return { p: criarPreenchedorCte(win, { timeoutMs: 200, intervaloMs: 2 }), doc, ordem, cliques };
+  return { p: criarPreenchedorCte(win, { timeoutMs: 200, intervaloMs: 2, calmaMs: 10 }), doc, ordem, cliques };
 }
 
 describe('preenchedor de CT-e', () => {
@@ -101,14 +103,14 @@ describe('preenchedor de CT-e', () => {
     doc.getElementById('txtTipoFrete').value = '1';
     const rel = await p.preencher(VALORES_CTE);
     expect(rel.ok).toBe(true);
-    expect(ordem).toEqual(['remetente', 'destinatario', 'aliquota', 'abrir-notas', 'consulta-chave', 'inserir-nota', 'frete-combinado', 'fechar-notas']);
+    expect(ordem).toEqual(['remetente', 'destinatario', 'aliquota', 'abrir-notas', 'consulta-chave', 'inserir-nota', 'fechar-notas', 'frete-combinado', 'motorista']);
     expect(doc.getElementById('txtNotasFiscaisChaveNfe').value).toBe('35260929124070000100550000000078311000007833');
     expect(doc.getElementById('txtNotasFiscaisSerie').value).toBe('1');
     expect(doc.getElementById('txtNotasFiscaisCfop').value).toBe('5102');
     expect(doc.getElementById('txtMercadoriasTransportadasProduto').selectedOptions[0].text).toBe('CONFORME NOTA');
     expect(doc.getElementById('txtMercadoriasTransportadasEspecie').value).toBe('VOL');
     expect(doc.getElementById('chkFreteCombinado').checked).toBe(true);
-    expect(doc.getElementById('ModalAskCte').classList.contains('in')).toBe(false);
+    expect(rel.avisos.join(' ')).toMatch(/Cobrar Taxa de Coleta/);
     expect(doc.getElementById('txtAliquotaICMS').value).toBe('12,00');
     expect(rel.avisos.join(' ')).toMatch(/Deseja incluir ICMS/);
     expect(rel.avisos.join(' ')).toMatch(/respons[aá]vel/i);
