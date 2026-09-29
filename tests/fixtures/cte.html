@@ -15,4 +15,13 @@
 <input type="checkbox" id="chkFreteCombinado" name="chkFreteCombinado" onclick="Cte.FreteCombinadoOnclick(event)">
 <div class="modal" id="ModalFreteCombinadoResponsavel" style="display:none"><div class="modal" id="ModalFreteCombinadoResponsavel" role="dialog" data-backdrop="false"> <div class="modal-dialog"> <!-- Modal content--> <div class="modal-content"> <div class="modal-header"> <button type="button" class="close" data-dismiss="modal">×</button> <h4 class="modal-title text-center">Responsável Frete Combinado</h4> </div> <div class="modal-body" style="height:50px;"> <div class="col-md-12"> <input type="text" id="txtFreteCombinadoResponsavel" name="txtFreteCombinadoResponsavel" class="form-control input-sm" maxlength="50" onkeydown="Cte.FocoBotaoFreteCombinadoOk(event)"> </div> </div> <div class="modal-footer"> <input type="button" id="btnOkFreteCombinado" class="btn btn-primary" onclick="Cte.FreteCombinadoBotaoOkClick()" value="Ok"> <button type="button" class="btn btn-default" data-dismiss="modal" onclick="$('#chkFreteCombinado').prop('checked', false)">Fechar</button> </div> </div> </div> </div><input type="text" id="txtFreteCombinadoResponsavel" name="txtFreteCombinadoResponsavel" class="form-control input-sm" maxlength="50" onkeydown="Cte.FocoBotaoFreteCombinadoOk(event)"></div>
 <input type="button" id="btnCadastrar" name="btnCadastrar" value="Cadastrar" class="btn btn-primary btn-block" onclick="Cte.CadastrarCte(event)" wfd-id="id62">
+<input type="text" id="txtAliquotaICMS" name="txtAliquotaICMS" value="0" class="form-control input-sm" disabled="disabled" maxlength="9">
+<div class="modal" id="ModalErro"><b id="erro"><br></b></div>
+<div class="modal" id="ModalAsk"><b id="pergunta" style="font-size:larger;"></b></div>
+<div class="modal" id="ModalAskCte"><b id="perguntaCte" style="font-size:larger;"></b></div>
+<div class="modal" id="ModalDemaisIeRemetente"></div>
+<div class="modal" id="ModalDemaisIeDestinatario"></div>
+<div class="modal" id="ModalDemaisIeExpedidor"></div>
+<div class="modal" id="ModalDemaisIeRecebedor"></div>
+<div class="modal" id="ModalDemaisIeTomador"></div>
 </body></html>

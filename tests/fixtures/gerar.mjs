@@ -40,8 +40,9 @@ const IDS_CTE = [
   'txtNotasFiscaisNotaFiscal', 'txtNotasFiscaisSerie', 'txtNotasFiscaisCfop', 'txtNotasFiscaisValorMerc',
   'txtNotasFiscaisVolume', 'txtNotasFiscaisPeso', 'txtNotasFiscaisDataEmissao', 'btnNotasFiscaisAdd',
   'divPartialNotasFiscais', 'txtMotoristaCpf', 'chkFreteCombinado', 'ModalFreteCombinadoResponsavel',
-  'txtFreteCombinadoResponsavel', 'btnCadastrar',
+  'txtFreteCombinadoResponsavel', 'btnCadastrar', 'txtAliquotaICMS',
 ];
+const MODAIS_CTE = ['ModalErro', 'ModalAsk', 'ModalAskCte', 'ModalDemaisIeRemetente', 'ModalDemaisIeDestinatario', 'ModalDemaisIeExpedidor', 'ModalDemaisIeRecebedor', 'ModalDemaisIeTomador'];
 const realCte = ['DigitacaoDeCT-e.html', 'campos_necessarios/DigitacaoDeCT-e.html'].find(existsSync);
 if (realCte) {
   const doc = new JSDOM(readFileSync(realCte, 'utf8')).window.document;
@@ -57,6 +58,13 @@ if (realCte) {
     const filhos = IDS_CTE.filter(fid => doc.getElementById(fid)?.closest(`#${id}`)).map(fid => doc.getElementById(fid).outerHTML.replace(/\s+/g, ' ')).join('');
     return `<div class="${el.className}" id="${id}" style="display:none">${filhos}</div>`;
   });
+  // Modais de erro/pergunta que o Sitra abre ao recusar um valor: só contêiner e texto.
+  for (const id of MODAIS_CTE) {
+    const m = doc.getElementById(id);
+    if (!m) throw new Error(`cte: #${id} não existe na página salva`);
+    const texto = m.querySelector('#erro, #pergunta, #perguntaCte');
+    linhas.push(`<div class="${m.className}" id="${id}">${texto ? texto.outerHTML.replace(/\s+/g, ' ') : ''}</div>`);
+  }
   writeFileSync('tests/fixtures/cte.html', `<!doctype html>\n<!-- GERADO por tests/fixtures/gerar.mjs a partir de ${realCte} — não editar à mão -->\n<html><body>\n${linhas.join('\n')}\n</body></html>\n`);
   console.log(`tests/fixtures/cte.html: ${linhas.length} elementos raiz`);
 }

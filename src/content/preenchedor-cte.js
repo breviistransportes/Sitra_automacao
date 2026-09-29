@@ -59,6 +59,20 @@ export function criarPreenchedorCte(win, { timeoutMs = 8000, intervaloMs = 100 }
     return !!modal && (modal.classList.contains('in') || modal.style.display === 'block');
   };
 
+  // Recusas do servidor mantêm o valor digitado e abrem um destes modais (DigitacaoCte.js, Search*).
+  const MODAIS_BLOQUEIO = ['ModalErro', 'ModalAsk', 'ModalAskCte', 'ModalDemaisIeRemetente', 'ModalDemaisIeDestinatario',
+    'ModalDemaisIeExpedidor', 'ModalDemaisIeRecebedor', 'ModalDemaisIeTomador'];
+  function mensagemBloqueio() {
+    const aberto = MODAIS_BLOQUEIO.find(modalVisivel);
+    if (!aberto) return null;
+    const texto = elemento(aberto).querySelector('#erro, #pergunta, #perguntaCte')?.textContent.replace(/\s+/g, ' ').trim();
+    return texto || 'o Sitra abriu uma pergunta ou erro na tela';
+  }
+  function verificarBloqueio(etapa) {
+    const msg = mensagemBloqueio();
+    if (msg) throw new Error(`${etapa}: ${msg} — resolva no Sitra antes de continuar.`);
+  }
+
   function estado() {
     const correto = win.location.origin === 'https://2323.aleff.com.br'
       && win.location.pathname.toLowerCase().replace(/\/$/, '') === '/digitacaocte2/digitacaocte2';
@@ -76,6 +90,7 @@ export function criarPreenchedorCte(win, { timeoutMs = 8000, intervaloMs = 100 }
       if (!valor) return;
       atribuir(id, valor, 'blur');
       await esperarSitra(etapa);
+      verificarBloqueio(etapa);
       if (!elemento(id)?.value) throw new Error(`${etapa}: o Sitra recusou o CNPJ informado.`);
       campos.push({ rotulo: etapa, status: 'ok', obtido: elemento(id).value });
     };
@@ -101,9 +116,12 @@ export function criarPreenchedorCte(win, { timeoutMs = 8000, intervaloMs = 100 }
 
       const produto = elemento('txtMercadoriasTransportadasProduto');
       const conformeNota = produto && [...produto.options].find(o => comparavel(o.text) === 'CONFORMENOTA');
-      if (conformeNota) atribuir('txtMercadoriasTransportadasProduto', conformeNota.value);
+      // Os dois campos têm onblur="Cte.GetAliqICMS()": o blur busca a alíquota de ICMS.
+      if (conformeNota) atribuir('txtMercadoriasTransportadasProduto', conformeNota.value, 'blur');
       else avisos.push('Produto predominante “CONFORME NOTA” não apareceu na lista do Sitra — escolha manualmente.');
-      atribuir('txtMercadoriasTransportadasEspecie', 'VOL');
+      atribuir('txtMercadoriasTransportadasEspecie', 'VOL', 'blur');
+      await esperarSitra('Alíquota de ICMS');
+      verificarBloqueio('Alíquota de ICMS');
 
       elemento('btnMercadoriasTransportadasNotasFiscais')?.click();
       await esperarCondicao('Abrir Notas e Outros', () => modalVisivel('ModalNotasFiscais'));
@@ -112,8 +130,13 @@ export function criarPreenchedorCte(win, { timeoutMs = 8000, intervaloMs = 100 }
       nf.checked = true;
       nf.dispatchEvent(new win.Event('change', { bubbles: true }));
 
+      // onblur="Cte.ConsultaChaveNotasFiscais": com a chave, o Sitra traz nº/série e bloqueia esses campos.
+      if (valores.chave_acesso) {
+        atribuir('txtNotasFiscaisChaveNfe', valores.chave_acesso, 'blur');
+        await esperarSitra('Consultar chave de acesso');
+        verificarBloqueio('Consultar chave de acesso');
+      }
       const nota = [
-        ['txtNotasFiscaisChaveNfe', valores.protocolo_autorizacao],
         ['txtNotasFiscaisNotaFiscal', valores.numero_nota],
         ['txtNotasFiscaisSerie', valores.serie],
         ['txtNotasFiscaisCfop', valores.cfop],
@@ -122,26 +145,39 @@ export function criarPreenchedorCte(win, { timeoutMs = 8000, intervaloMs = 100 }
         ['txtNotasFiscaisPeso', valores.peso_bruto],
         ['txtNotasFiscaisDataEmissao', valores.data_emissao],
       ];
-      for (const [id, valor] of nota) if (elemento(id) && valor) atribuir(id, valor);
+      for (const [id, valor] of nota) if (elemento(id) && !elemento(id).disabled && valor) atribuir(id, valor);
 
       const grade = elemento('divPartialNotasFiscais');
       const antes = grade?.innerHTML ?? '';
       elemento('btnNotasFiscaisAdd')?.click();
       await esperarSitra('Inserir nota');
+      verificarBloqueio('Inserir nota');
       await esperarCondicao('A nota não apareceu na grade', () => {
         const agora = grade?.innerHTML ?? '';
         return agora !== antes && (!!grade?.querySelector('tr') || !!agora.trim());
       });
-      campos.push({ rotulo: 'Nota fiscal', status: 'ok', obtido: valores.numero_nota || valores.protocolo_autorizacao });
+      campos.push({ rotulo: 'Nota fiscal', status: 'ok', obtido: valores.numero_nota || valores.chave_acesso });
+
+      // Fechar o modal dispara hide.bs.modal, que soma as notas (total e peso) — como no processo manual.
+      win.jQuery?.('#ModalNotasFiscais')?.modal?.('hide');
+      await esperarCondicao('Fechar Notas e Outros', () => !modalVisivel('ModalNotasFiscais'));
+      await esperarSitra('Somar notas');
+      verificarBloqueio('Somar notas');
 
       if (valores.motorista_cpf) {
         atribuir('txtMotoristaCpf', valores.motorista_cpf, 'blur');
         await esperarSitra('Motorista');
+        verificarBloqueio('Motorista');
       }
       const combinado = elemento('chkFreteCombinado');
       if (!combinado) throw new Error('A opção Frete Combinado não existe mais na tela do Sitra.');
       if (!combinado.checked) combinado.click();
-      await esperarCondicao('Abrir responsável pelo frete combinado', () => modalVisivel('ModalFreteCombinadoResponsavel'));
+      await esperarCondicao('Marcar Frete Combinado', () => combinado.checked);
+      campos.push({ rotulo: 'Frete Combinado', status: 'ok', obtido: 'marcado' });
+      // Com alíquota ≠ 0 o Sitra pergunta "Deseja incluir ICMS": a decisão fiscal é do operador.
+      const pergunta = mensagemBloqueio();
+      if (pergunta) avisos.push(`O Sitra perguntou: "${pergunta}" — responda na tela.`);
+      avisos.push('Informe o responsável pelo frete combinado e os campos manuais antes de cadastrar.');
       return { ok: true, tela: 'cte', avisos, campos };
     } catch (e) {
       return falha(e.message);

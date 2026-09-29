@@ -418,6 +418,26 @@
       const modal = elemento(id);
       return !!modal && (modal.classList.contains("in") || modal.style.display === "block");
     };
+    const MODAIS_BLOQUEIO = [
+      "ModalErro",
+      "ModalAsk",
+      "ModalAskCte",
+      "ModalDemaisIeRemetente",
+      "ModalDemaisIeDestinatario",
+      "ModalDemaisIeExpedidor",
+      "ModalDemaisIeRecebedor",
+      "ModalDemaisIeTomador"
+    ];
+    function mensagemBloqueio() {
+      const aberto = MODAIS_BLOQUEIO.find(modalVisivel);
+      if (!aberto) return null;
+      const texto = elemento(aberto).querySelector("#erro, #pergunta, #perguntaCte")?.textContent.replace(/\s+/g, " ").trim();
+      return texto || "o Sitra abriu uma pergunta ou erro na tela";
+    }
+    function verificarBloqueio(etapa) {
+      const msg = mensagemBloqueio();
+      if (msg) throw new Error(`${etapa}: ${msg} \u2014 resolva no Sitra antes de continuar.`);
+    }
     function estado() {
       const correto = win.location.origin === "https://2323.aleff.com.br" && win.location.pathname.toLowerCase().replace(/\/$/, "") === "/digitacaocte2/digitacaocte2";
       return { tela: correto ? "cte" : null, tipoFreteEscolhido: !!elemento("txtTipoFrete")?.value };
@@ -432,6 +452,7 @@
         if (!valor) return;
         atribuir(id, valor, "blur");
         await esperarSitra(etapa);
+        verificarBloqueio(etapa);
         if (!elemento(id)?.value) throw new Error(`${etapa}: o Sitra recusou o CNPJ informado.`);
         campos.push({ rotulo: etapa, status: "ok", obtido: elemento(id).value });
       };
@@ -454,17 +475,23 @@
         }
         const produto = elemento("txtMercadoriasTransportadasProduto");
         const conformeNota = produto && [...produto.options].find((o) => comparavel2(o.text) === "CONFORMENOTA");
-        if (conformeNota) atribuir("txtMercadoriasTransportadasProduto", conformeNota.value);
+        if (conformeNota) atribuir("txtMercadoriasTransportadasProduto", conformeNota.value, "blur");
         else avisos.push("Produto predominante \u201CCONFORME NOTA\u201D n\xE3o apareceu na lista do Sitra \u2014 escolha manualmente.");
-        atribuir("txtMercadoriasTransportadasEspecie", "VOL");
+        atribuir("txtMercadoriasTransportadasEspecie", "VOL", "blur");
+        await esperarSitra("Al\xEDquota de ICMS");
+        verificarBloqueio("Al\xEDquota de ICMS");
         elemento("btnMercadoriasTransportadasNotasFiscais")?.click();
         await esperarCondicao("Abrir Notas e Outros", () => modalVisivel("ModalNotasFiscais"));
         const nf = elemento("rdbNF");
         if (!nf) throw new Error("A op\xE7\xE3o NF-e/NF n\xE3o existe mais na tela do Sitra.");
         nf.checked = true;
         nf.dispatchEvent(new win.Event("change", { bubbles: true }));
+        if (valores.chave_acesso) {
+          atribuir("txtNotasFiscaisChaveNfe", valores.chave_acesso, "blur");
+          await esperarSitra("Consultar chave de acesso");
+          verificarBloqueio("Consultar chave de acesso");
+        }
         const nota = [
-          ["txtNotasFiscaisChaveNfe", valores.protocolo_autorizacao],
           ["txtNotasFiscaisNotaFiscal", valores.numero_nota],
           ["txtNotasFiscaisSerie", valores.serie],
           ["txtNotasFiscaisCfop", valores.cfop],
@@ -473,24 +500,34 @@
           ["txtNotasFiscaisPeso", valores.peso_bruto],
           ["txtNotasFiscaisDataEmissao", valores.data_emissao]
         ];
-        for (const [id, valor] of nota) if (elemento(id) && valor) atribuir(id, valor);
+        for (const [id, valor] of nota) if (elemento(id) && !elemento(id).disabled && valor) atribuir(id, valor);
         const grade = elemento("divPartialNotasFiscais");
         const antes = grade?.innerHTML ?? "";
         elemento("btnNotasFiscaisAdd")?.click();
         await esperarSitra("Inserir nota");
+        verificarBloqueio("Inserir nota");
         await esperarCondicao("A nota n\xE3o apareceu na grade", () => {
           const agora = grade?.innerHTML ?? "";
           return agora !== antes && (!!grade?.querySelector("tr") || !!agora.trim());
         });
-        campos.push({ rotulo: "Nota fiscal", status: "ok", obtido: valores.numero_nota || valores.protocolo_autorizacao });
+        campos.push({ rotulo: "Nota fiscal", status: "ok", obtido: valores.numero_nota || valores.chave_acesso });
+        win.jQuery?.("#ModalNotasFiscais")?.modal?.("hide");
+        await esperarCondicao("Fechar Notas e Outros", () => !modalVisivel("ModalNotasFiscais"));
+        await esperarSitra("Somar notas");
+        verificarBloqueio("Somar notas");
         if (valores.motorista_cpf) {
           atribuir("txtMotoristaCpf", valores.motorista_cpf, "blur");
           await esperarSitra("Motorista");
+          verificarBloqueio("Motorista");
         }
         const combinado = elemento("chkFreteCombinado");
         if (!combinado) throw new Error("A op\xE7\xE3o Frete Combinado n\xE3o existe mais na tela do Sitra.");
         if (!combinado.checked) combinado.click();
-        await esperarCondicao("Abrir respons\xE1vel pelo frete combinado", () => modalVisivel("ModalFreteCombinadoResponsavel"));
+        await esperarCondicao("Marcar Frete Combinado", () => combinado.checked);
+        campos.push({ rotulo: "Frete Combinado", status: "ok", obtido: "marcado" });
+        const pergunta = mensagemBloqueio();
+        if (pergunta) avisos.push(`O Sitra perguntou: "${pergunta}" \u2014 responda na tela.`);
+        avisos.push("Informe o respons\xE1vel pelo frete combinado e os campos manuais antes de cadastrar.");
         return { ok: true, tela: "cte", avisos, campos };
       } catch (e) {
         return falha(e.message);

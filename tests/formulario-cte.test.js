@@ -27,6 +27,13 @@ describe('formulário CT-e', () => {
     expect(f.elements.c_cfop.closest('label').classList.contains('conferir')).toBe(true);
   });
 
+  it('campos vazios não bloqueiam o preenchimento por enquanto', () => {
+    document.body.innerHTML = `<form id="f">${montarFormularioCte({})}</form>`;
+    const f = document.getElementById('f');
+    expect(lerFormularioCte(f).faltando).toEqual([]);
+    expect(f.textContent).not.toContain('*');
+  });
+
   it('exige CNPJ manual quando tomador é expedidor ou recebedor', () => {
     document.body.innerHTML = `<form id="f">${montarFormularioCte(valores)}</form>`;
     const f = document.getElementById('f');

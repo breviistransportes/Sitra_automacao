@@ -1,7 +1,7 @@
 # Automação da digitação manual de CT-e — Design
 
 **Data:** 2026-09-28  
-**Status:** aprovado em conversa; aguardando revisão do documento  
+**Status:** aprovado; revisado em 2026-09-29 após a revisão final e o teste no Sitra real (chave de acesso, campos opcionais, frete combinado)  
 **Projeto:** extensão Cadastro de Motorista — Sitra Web Revolution
 
 ## 1. Objetivo
@@ -102,7 +102,7 @@ A extensão não altera o Tipo de Frete. Quando o campo de tomador do Sitra esti
 | Valor fixo | `txtMercadoriasTransportadasProduto` | Selecionar `CONFORME NOTA` |
 | Valor fixo `VOL` | `txtMercadoriasTransportadasEspecie` | Sempre preencher |
 | CPF manual | `txtMotoristaCpf` | Preencher se informado |
-| Protocolo de autorização | `txtNotasFiscaisChaveNfe` | Manter `NF-e/NF` selecionado |
+| Chave de acesso (44 dígitos) | `txtNotasFiscaisChaveNfe` | Manter `NF-e/NF` selecionado; o blur consulta a chave e o Sitra preenche nº/série. **Revisado em 2026-09-29:** o Sitra recusa o protocolo ("Favor informar uma chave de nota fiscal válida!"); o protocolo fica só na conferência |
 | Número da nota | `txtNotasFiscaisNotaFiscal` | Preencher quando legível |
 | Série | `txtNotasFiscaisSerie` | Preencher quando legível |
 | Primeiro CFOP legível | `txtNotasFiscaisCfop` | Avisar quando houver mais de um |
@@ -111,7 +111,7 @@ A extensão não altera o Tipo de Frete. Quando o campo de tomador do Sitra esti
 | Peso bruto ou líquido | `txtNotasFiscaisPeso` | Preferir bruto |
 | Data de emissão | `txtNotasFiscaisDataEmissao` | Formato `DD/MM/AAAA` |
 | Ação | `btnNotasFiscaisAdd` | Clicar para inserir a nota na grade |
-| Seleção final | `chkFreteCombinado` | Marcar e deixar o modal do responsável aberto |
+| Seleção final | `chkFreteCombinado` | Marcar. **Revisado em 2026-09-29:** o JS real não abre o modal do responsável ao marcar; a extensão avisa o operador para informá-lo e repassa a pergunta de ICMS, se houver |
 
 A opção **Descrição** do pop-up não será preenchida. A automação usa exclusivamente o tipo **NF-e/NF**.
 
