@@ -58,6 +58,23 @@ export const quantidadeVeiculos = (form) => form.querySelectorAll('[data-painel^
 
 export const rotuloDaAba = (form, aba) => form.querySelector(`.aba[data-tela="${aba}"]`)?.textContent ?? '';
 
+// Estado da tela como está (valor digitado, amarelo ou não, fonte), no formato de montarFormulario — para o histórico.
+export function dadosDoFormulario(form) {
+  const ler = (c, i) => {
+    const e = form.elements[nomeDoCampo(c, i)];
+    const label = e?.closest('label');
+    return {
+      valor: e?.value ?? '',
+      certeza: label?.classList.contains('conferir') ? 'conferir' : 'alta',
+      fonte: label?.querySelector('small')?.textContent ?? '',
+    };
+  };
+  const valores = Object.fromEntries(CAMPOS.filter(c => c.tela !== 'veiculo').map(c => [c.chave, ler(c, 0)]));
+  const veiculos = Array.from({ length: quantidadeVeiculos(form) }, (_, i) =>
+    Object.fromEntries(camposDaTela('veiculo').map(c => [c.chave, ler(c, i)])));
+  return { valores, veiculos };
+}
+
 // Lê os campos gerais e os do veículo da aba (o primeiro, se a aba não for de veículo).
 // Inválidos/faltando: só da tela da aba informada (ou de todas, sem aba).
 export function lerFormulario(form, aba) {

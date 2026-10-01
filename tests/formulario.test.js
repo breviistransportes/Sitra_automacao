@@ -113,3 +113,26 @@ describe('formulário de conferência', () => {
     });
   });
 });
+
+describe('estado do formulário para o histórico', () => {
+  it('dadosDoFormulario devolve valores, certeza e fonte como estão na tela, por veículo', async () => {
+    const { dadosDoFormulario } = await import('../src/sidepanel/formulario.js');
+    const v = vazio();
+    v.cpf = { valor: '529.982.247-25', certeza: 'alta', fonte: 'CNH-e.pdf' };
+    const carreta = { ...vazio(), veic_placa: { valor: 'XYZ-9K87', certeza: 'conferir', fonte: 'CRLV.pdf' } };
+    document.body.innerHTML = `<form id="f">${montarFormulario(v, [v, carreta])}</form>`;
+    const f = document.getElementById('f');
+    f.elements.c_nome.value = 'JOSE DA SILVA';
+    f.elements.c_nome.closest('label').classList.remove('conferir'); // o painel tira o amarelo ao digitar
+    const d = dadosDoFormulario(f);
+    expect(d.valores.cpf).toEqual({ valor: '529.982.247-25', certeza: 'alta', fonte: 'CNH-e.pdf' });
+    expect(d.valores.nome).toEqual({ valor: 'JOSE DA SILVA', certeza: 'alta', fonte: '' });
+    expect(d.valores.veic_placa).toBeUndefined();
+    expect(d.veiculos).toHaveLength(2);
+    expect(d.veiculos[1].veic_placa).toEqual({ valor: 'XYZ-9K87', certeza: 'conferir', fonte: 'CRLV.pdf' });
+    // Reabrir do histórico reconstrói a mesma tela.
+    document.body.innerHTML = `<form id="g">${montarFormulario(d.valores, d.veiculos)}</form>`;
+    expect(document.getElementById('g').elements.c_nome.value).toBe('JOSE DA SILVA');
+    expect(document.getElementById('g').elements.c_veic_placa__1.value).toBe('XYZ-9K87');
+  });
+});

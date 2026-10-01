@@ -5,7 +5,8 @@ import { chamarGeminiCte, posProcessarCte } from '../lib/extrator-cte.js';
 import { textoDoPdf } from '../lib/pdf.js';
 import { camposDivergentes } from '../lib/conferencia.js';
 import { lerConfig, salvarConfig } from '../lib/config.js';
-import { montarFormulario, lerFormulario, mostrarAba, abaAtiva, quantidadeVeiculos, rotuloDaAba } from './formulario.js';
+import { montarFormulario, lerFormulario, mostrarAba, abaAtiva, quantidadeVeiculos, rotuloDaAba, dadosDoFormulario } from './formulario.js';
+import { lerHistorico, salvarNoHistorico, excluirDoHistorico, apagarHistorico, resumoDoRegistro } from '../lib/historico.js';
 import { montarFormularioCte, lerFormularioCte } from './formulario-cte.js';
 import { versaoMaior, linkAtualizacaoValido } from '../lib/versao.js';
 import { TELAS, CAMPO_POR_CHAVE, ehSitra, valoresDaTela } from '../lib/campos.js';
@@ -17,6 +18,8 @@ const $ = (id) => document.getElementById(id);
 let arquivos = [];
 let confirmarSobrescrita = false;
 let modo = 'cadastro';
+// Cadastro do histórico que está aberto na conferência (atualizado a cada "Preencher no Sitra").
+let registroAtual = null;
 
 function mostrar(etapa) {
   for (const s of document.querySelectorAll('section[data-etapa]')) s.hidden = s.dataset.etapa !== etapa;
@@ -110,7 +113,10 @@ async function lerDocumentos() {
     const r = posProcessar(bruto, cfg.padroes, { textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura });
     $('form-conferencia').innerHTML = montarFormulario(r.valores, r.veiculos);
     const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(', ')}`] : [];
-    preencherLista($('avisos'), [...docsLidos, ...avisosEntrada, ...r.avisos]);
+    const avisos = [...docsLidos, ...avisosEntrada, ...r.avisos];
+    preencherLista($('avisos'), avisos);
+    registroAtual = null;
+    await guardarNoHistorico({ valores: r.valores, veiculos: r.veiculos, avisos });
     confirmarSobrescrita = false;
     mostrar('conferencia');
   } catch (e) {
@@ -202,6 +208,8 @@ async function preencherSitra() {
   confirmarSobrescrita = false;
   if (faltando.length) mensagem(`Vai ficar faltando (${rotuloTela}): ${faltando.join(', ')}`, 'alerta');
 
+  // O que está na tela agora (com as correções do operador) vai para o histórico.
+  await guardarNoHistorico(dadosDoFormulario(form));
   $('btn-preencher').disabled = true;
   $('btn-preencher').textContent = 'Preenchendo…';
   try {
@@ -216,6 +224,8 @@ async function preencherSitra() {
 
 function recomecar() {
   arquivos = [];
+  registroAtual = null;
+  atualizarBotaoHistorico();
   $('mensagens').value = '';
   listarArquivos();
   mensagem('');
@@ -253,6 +263,9 @@ $('zona').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('seletor').click(); }
 });
 $('btn-ler').addEventListener('click', lerDocumentos);
+$('btn-historico').addEventListener('click', abrirHistorico);
+$('btn-historico-voltar').addEventListener('click', recomecar);
+$('btn-historico-apagar').addEventListener('click', apagarTudo);
 $('mensagens').addEventListener('input', atualizarBotaoLer);
 $('btn-preencher').addEventListener('click', (e) => { e.preventDefault(); preencherSitra(); });
 $('btn-recomecar').addEventListener('click', recomecar);
@@ -269,6 +282,74 @@ $('form-conferencia').addEventListener('click', (e) => {
 });
 for (const botao of document.querySelectorAll('[data-modo]')) botao.addEventListener('click', () => aplicarModo(botao.dataset.modo));
 
+// Histórico: falhar ao guardar não pode atrapalhar a leitura nem o preenchimento.
+async function guardarNoHistorico(dados) {
+  try {
+    registroAtual = (await salvarNoHistorico({ id: registroAtual ?? undefined, ...dados })).id;
+  } catch {
+    // sem histórico desta vez
+  }
+}
+
+async function atualizarBotaoHistorico() {
+  const n = modo === 'cadastro' ? (await lerHistorico().catch(() => [])).length : 0;
+  $('btn-historico').textContent = `Histórico (${n})`;
+  $('btn-historico').hidden = n === 0;
+}
+
+async function abrirHistorico() {
+  mensagem('');
+  const lista = await lerHistorico().catch(() => []);
+  const ul = $('lista-historico');
+  ul.innerHTML = '';
+  for (const r of lista) {
+    const { nome, cpf, placas, quando } = resumoDoRegistro(r);
+    const li = document.createElement('li');
+    const info = document.createElement('div');
+    info.className = 'registro';
+    const titulo = document.createElement('strong');
+    titulo.textContent = nome;
+    const detalhe = document.createElement('small');
+    detalhe.textContent = [quando, cpf && `CPF ${cpf}`, placas.join(', ')].filter(Boolean).join(' · ');
+    info.append(titulo, detalhe);
+    const abrir = document.createElement('button');
+    abrir.textContent = 'Abrir';
+    abrir.onclick = () => abrirRegistro(r);
+    const excluir = document.createElement('button');
+    excluir.textContent = 'Excluir';
+    excluir.className = 'secundario';
+    excluir.onclick = async () => { await excluirDoHistorico(r.id).catch(() => {}); abrirHistorico(); };
+    li.append(info, abrir, excluir);
+    ul.append(li);
+  }
+  $('historico-vazio').hidden = lista.length > 0;
+  $('btn-historico-apagar').hidden = lista.length === 0;
+  $('btn-historico-apagar').classList.remove('confirmar');
+  $('btn-historico-apagar').textContent = 'Apagar tudo';
+  mostrar('historico');
+}
+
+function abrirRegistro(r) {
+  $('form-conferencia').innerHTML = montarFormulario(r.valores ?? {}, r.veiculos ?? []);
+  preencherLista($('avisos'), r.avisos ?? []);
+  registroAtual = r.id;
+  confirmarSobrescrita = false;
+  mensagem('');
+  mostrar('conferencia');
+}
+
+// Sem confirm() do navegador: o primeiro clique só pede confirmação, o segundo apaga.
+async function apagarTudo() {
+  const b = $('btn-historico-apagar');
+  if (!b.classList.contains('confirmar')) {
+    b.classList.add('confirmar');
+    b.textContent = 'Clique de novo para apagar tudo';
+    return;
+  }
+  await apagarHistorico().catch(() => {});
+  abrirHistorico();
+}
+
 // Aviso de versão nova publicada no GitHub (Releases). Sem internet ou sem release: não mostra nada.
 async function verificarAtualizacao() {
   try {
@@ -284,6 +365,7 @@ async function verificarAtualizacao() {
   }
 }
 verificarAtualizacao();
+atualizarBotaoHistorico();
 
 // Configurações dentro do próprio painel (não depende da página de opções do Chrome).
 async function abrirConfig(aviso = '') {

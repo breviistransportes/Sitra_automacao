@@ -39,6 +39,10 @@ Baixe o `.zip`, extraia **por cima da mesma pasta** e, em `chrome://extensions`,
 4. No Sitra, abra a tela (Proprietário, depois Veículo, depois Motorista) e clique em **Preencher no Sitra**.
 5. Confira a tela do Sitra e clique em **Cadastrar**.
 
+### Histórico
+
+Cada leitura fica guardada em **Histórico (N)**, na tela inicial, por 30 dias (no máximo 200 cadastros). Ali você reabre um cadastro, já conferido, para preencher de novo no Sitra sem ler os documentos outra vez. A cada **Preencher no Sitra** o histórico guarda também as correções feitas no painel. Dá para excluir um cadastro ou **Apagar tudo**.
+
 ### Usar o modo CT-e manual
 
 1. No painel, selecione **CT-e manual**, anexe a foto ou o PDF da nota e clique em **Ler nota**.
@@ -76,6 +80,7 @@ Os computadores com a extensão passam a ver o aviso "Nova versão disponível".
 - **Conteúdo dos documentos não é confiável:** a extensão remove caracteres de HTML/script dos campos de texto,
   mantém em amarelo campos críticos lidos de texto/mensagem, só aceita telefone/e-mail que estejam escritos nas
   mensagens e recusa `.zip`/arquivos grandes demais. **Sempre confira** a conferência e a tela do Sitra antes de cadastrar.
+- **Histórico:** guarda no Chrome do computador (não vai para nenhum servidor) os dados conferidos de cada cadastro — CPF, CNH, endereço, placas —, sem as fotos e PDFs, e apaga sozinho o que passou de 30 dias. Em computador compartilhado, use **Apagar tudo** ao terminar.
 - **Escopo:** a extensão só injeta no Sitra da empresa (`https://2323.aleff.com.br`) e envia para a página apenas
   os campos da tela aberta.
 - **LGPD:** CNH, CPF, endereço e mensagens dos motoristas são enviados ao Google (Gemini) para leitura. Registre essa

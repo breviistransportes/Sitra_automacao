@@ -31259,6 +31259,20 @@ function mostrarAba(form, aba) {
 var abaAtiva = (form) => form.querySelector(".aba.ativa")?.dataset.tela ?? null;
 var quantidadeVeiculos = (form) => form.querySelectorAll('[data-painel^="veiculo:"]').length;
 var rotuloDaAba = (form, aba) => form.querySelector(`.aba[data-tela="${aba}"]`)?.textContent ?? "";
+function dadosDoFormulario(form) {
+  const ler2 = (c, i) => {
+    const e = form.elements[nomeDoCampo(c, i)];
+    const label = e?.closest("label");
+    return {
+      valor: e?.value ?? "",
+      certeza: label?.classList.contains("conferir") ? "conferir" : "alta",
+      fonte: label?.querySelector("small")?.textContent ?? ""
+    };
+  };
+  const valores = Object.fromEntries(CAMPOS.filter((c) => c.tela !== "veiculo").map((c) => [c.chave, ler2(c, 0)]));
+  const veiculos = Array.from({ length: quantidadeVeiculos(form) }, (_, i) => Object.fromEntries(camposDaTela("veiculo").map((c) => [c.chave, ler2(c, i)])));
+  return { valores, veiculos };
+}
 function lerFormulario(form, aba) {
   const i = indiceVeiculo(aba);
   const tela = aba ? telaDaAba(aba) : null;
@@ -31272,6 +31286,48 @@ function lerFormulario(form, aba) {
     else if (!v && c.obrigatorio) faltando.push(c.rotulo);
   }
   return { valores, invalidos, faltando };
+}
+
+// src/lib/historico.js
+var DIAS_NO_HISTORICO = 30;
+var MAXIMO_NO_HISTORICO = 200;
+var CHAVE = "historico";
+var DIA = 24 * 60 * 60 * 1e3;
+function validos(lista2, agora) {
+  return (Array.isArray(lista2) ? lista2 : []).filter((r) => r && typeof r.id === "string" && agora - r.atualizadoEm <= DIAS_NO_HISTORICO * DIA).sort((a, b) => b.atualizadoEm - a.atualizadoEm).slice(0, MAXIMO_NO_HISTORICO);
+}
+async function ler(storage, agora) {
+  const { [CHAVE]: bruto } = await storage.get(CHAVE);
+  const lista2 = validos(bruto, agora);
+  if (!Array.isArray(bruto) || lista2.length !== bruto.length) await storage.set({ [CHAVE]: lista2 });
+  return lista2;
+}
+async function lerHistorico({ storage = chrome.storage.local, agora = Date.now() } = {}) {
+  return ler(storage, agora);
+}
+async function salvarNoHistorico({ id, valores, veiculos, avisos }, { storage = chrome.storage.local, agora = Date.now(), novoId = () => crypto.randomUUID() } = {}) {
+  const lista2 = await ler(storage, agora);
+  const atual = id && lista2.find((r) => r.id === id);
+  const registro = atual ? { ...atual, valores, veiculos, ...avisos ? { avisos } : {}, atualizadoEm: agora } : { id: id ?? novoId(), criadoEm: agora, atualizadoEm: agora, valores, veiculos, avisos: avisos ?? [] };
+  await storage.set({ [CHAVE]: validos([registro, ...lista2.filter((r) => r.id !== registro.id)], agora) });
+  return registro;
+}
+async function excluirDoHistorico(id, { storage = chrome.storage.local, agora = Date.now() } = {}) {
+  const lista2 = await ler(storage, agora);
+  await storage.set({ [CHAVE]: lista2.filter((r) => r.id !== id) });
+}
+async function apagarHistorico({ storage = chrome.storage.local } = {}) {
+  await storage.remove(CHAVE);
+}
+var doisDigitos = (n) => String(n).padStart(2, "0");
+function resumoDoRegistro(r) {
+  const d = new Date(r.atualizadoEm);
+  return {
+    nome: r.valores?.nome?.valor || "(sem nome)",
+    cpf: r.valores?.cpf?.valor ?? "",
+    placas: (r.veiculos ?? []).map((v) => v?.veic_placa?.valor).filter(Boolean),
+    quando: `${doisDigitos(d.getDate())}/${doisDigitos(d.getMonth() + 1)}/${d.getFullYear()} ${doisDigitos(d.getHours())}:${doisDigitos(d.getMinutes())}`
+  };
 }
 
 // src/sidepanel/formulario-cte.js
@@ -31329,6 +31385,7 @@ var $ = (id) => document.getElementById(id);
 var arquivos = [];
 var confirmarSobrescrita = false;
 var modo = "cadastro";
+var registroAtual = null;
 function mostrar(etapa) {
   for (const s of document.querySelectorAll("section[data-etapa]")) s.hidden = s.dataset.etapa !== etapa;
 }
@@ -31412,7 +31469,10 @@ async function lerDocumentos() {
     const r = posProcessar(bruto, cfg.padroes, { textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura });
     $("form-conferencia").innerHTML = montarFormulario(r.valores, r.veiculos);
     const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(", ")}`] : [];
-    preencherLista($("avisos"), [...docsLidos, ...avisosEntrada, ...r.avisos]);
+    const avisos = [...docsLidos, ...avisosEntrada, ...r.avisos];
+    preencherLista($("avisos"), avisos);
+    registroAtual = null;
+    await guardarNoHistorico({ valores: r.valores, veiculos: r.veiculos, avisos });
     confirmarSobrescrita = false;
     mostrar("conferencia");
   } catch (e) {
@@ -31513,6 +31573,7 @@ async function preencherSitra() {
   }
   confirmarSobrescrita = false;
   if (faltando.length) mensagem(`Vai ficar faltando (${rotuloTela}): ${faltando.join(", ")}`, "alerta");
+  await guardarNoHistorico(dadosDoFormulario(form));
   $("btn-preencher").disabled = true;
   $("btn-preencher").textContent = "Preenchendo\u2026";
   try {
@@ -31526,6 +31587,8 @@ async function preencherSitra() {
 }
 function recomecar() {
   arquivos = [];
+  registroAtual = null;
+  atualizarBotaoHistorico();
   $("mensagens").value = "";
   listarArquivos();
   mensagem("");
@@ -31571,6 +31634,9 @@ $("zona").addEventListener("keydown", (e) => {
   }
 });
 $("btn-ler").addEventListener("click", lerDocumentos);
+$("btn-historico").addEventListener("click", abrirHistorico);
+$("btn-historico-voltar").addEventListener("click", recomecar);
+$("btn-historico-apagar").addEventListener("click", apagarTudo);
 $("mensagens").addEventListener("input", atualizarBotaoLer);
 $("btn-preencher").addEventListener("click", (e) => {
   e.preventDefault();
@@ -31598,6 +31664,71 @@ $("form-conferencia").addEventListener("click", (e) => {
   if (aba) mostrarAba($("form-conferencia"), aba.dataset.tela);
 });
 for (const botao of document.querySelectorAll("[data-modo]")) botao.addEventListener("click", () => aplicarModo(botao.dataset.modo));
+async function guardarNoHistorico(dados) {
+  try {
+    registroAtual = (await salvarNoHistorico({ id: registroAtual ?? void 0, ...dados })).id;
+  } catch {
+  }
+}
+async function atualizarBotaoHistorico() {
+  const n = modo === "cadastro" ? (await lerHistorico().catch(() => [])).length : 0;
+  $("btn-historico").textContent = `Hist\xF3rico (${n})`;
+  $("btn-historico").hidden = n === 0;
+}
+async function abrirHistorico() {
+  mensagem("");
+  const lista2 = await lerHistorico().catch(() => []);
+  const ul = $("lista-historico");
+  ul.innerHTML = "";
+  for (const r of lista2) {
+    const { nome, cpf, placas, quando } = resumoDoRegistro(r);
+    const li = document.createElement("li");
+    const info2 = document.createElement("div");
+    info2.className = "registro";
+    const titulo = document.createElement("strong");
+    titulo.textContent = nome;
+    const detalhe = document.createElement("small");
+    detalhe.textContent = [quando, cpf && `CPF ${cpf}`, placas.join(", ")].filter(Boolean).join(" \xB7 ");
+    info2.append(titulo, detalhe);
+    const abrir = document.createElement("button");
+    abrir.textContent = "Abrir";
+    abrir.onclick = () => abrirRegistro(r);
+    const excluir = document.createElement("button");
+    excluir.textContent = "Excluir";
+    excluir.className = "secundario";
+    excluir.onclick = async () => {
+      await excluirDoHistorico(r.id).catch(() => {
+      });
+      abrirHistorico();
+    };
+    li.append(info2, abrir, excluir);
+    ul.append(li);
+  }
+  $("historico-vazio").hidden = lista2.length > 0;
+  $("btn-historico-apagar").hidden = lista2.length === 0;
+  $("btn-historico-apagar").classList.remove("confirmar");
+  $("btn-historico-apagar").textContent = "Apagar tudo";
+  mostrar("historico");
+}
+function abrirRegistro(r) {
+  $("form-conferencia").innerHTML = montarFormulario(r.valores ?? {}, r.veiculos ?? []);
+  preencherLista($("avisos"), r.avisos ?? []);
+  registroAtual = r.id;
+  confirmarSobrescrita = false;
+  mensagem("");
+  mostrar("conferencia");
+}
+async function apagarTudo() {
+  const b = $("btn-historico-apagar");
+  if (!b.classList.contains("confirmar")) {
+    b.classList.add("confirmar");
+    b.textContent = "Clique de novo para apagar tudo";
+    return;
+  }
+  await apagarHistorico().catch(() => {
+  });
+  abrirHistorico();
+}
 async function verificarAtualizacao() {
   try {
     const r = await fetch("https://api.github.com/repos/breviistransportes/Sitra_automacao/releases/latest");
@@ -31611,6 +31742,7 @@ async function verificarAtualizacao() {
   }
 }
 verificarAtualizacao();
+atualizarBotaoHistorico();
 async function abrirConfig(aviso = "") {
   const cfg = await lerConfig();
   $("cfg-apiKey").value = cfg.apiKey;
