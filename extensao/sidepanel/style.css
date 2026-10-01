@@ -248,3 +248,17 @@ legend { padding: 0 4px; font-size: 11px; font-weight: 700; letter-spacing: .06e
 #lista-historico .registro small { color: var(--muted); font-size: 11.5px; overflow-wrap: anywhere; }
 #lista-historico button { min-height: 28px; padding: 0 10px; font-size: 12px; }
 #btn-historico-apagar.confirmar { color: var(--error-text); background: var(--error-bg); }
+
+/* CRM: login nas configurações e quadro de cruzamento na conferência */
+.crm-bloco { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+.crm-login { display: grid; gap: 8px; }
+#cruzamento { display: grid; gap: 8px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: 12.5px; }
+#cruzamento .cruzamento-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#cruzamento .cruzamento-topo button { min-height: 26px; padding: 0 8px; font-size: 11.5px; }
+#cruzamento .viagem { display: grid; gap: 4px; }
+#cruzamento .viagem + .viagem { padding-top: 8px; border-top: 1px solid var(--border); }
+#cruzamento .viagem small { color: var(--muted); overflow-wrap: anywhere; }
+#cruzamento ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+#cruzamento li { overflow-wrap: anywhere; }
+#cruzamento li.alerta { color: var(--warn-text, inherit); font-weight: 600; }
+#cruzamento .nota { margin: 0; color: var(--muted); }

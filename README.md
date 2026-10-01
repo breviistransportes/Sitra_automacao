@@ -39,6 +39,10 @@ Baixe o `.zip`, extraia **por cima da mesma pasta** e, em `chrome://extensions`,
 4. No Sitra, abra a tela (Proprietário, depois Veículo, depois Motorista) e clique em **Preencher no Sitra**.
 5. Confira a tela do Sitra e clique em **Cadastrar**.
 
+### Comparar com o CRM
+
+Em **Configurações → CRM**, entre com a sua conta do CRM (logística ou admin). Depois de ler os documentos (ou ao abrir um cadastro do histórico), aparece o quadro **CRM — viagens programadas**: a viagem programada com o mesmo CPF ou alguma das placas, com ✅/⚠️ para CPF, nome e cada placa (cavalo e carreta). O quadro só avisa — não preenche nada nem altera o CRM. Corrigiu algo no painel? **Comparar de novo**.
+
 ### Histórico
 
 Cada leitura fica guardada em **Histórico (N)**, na tela inicial, por 30 dias (no máximo 200 cadastros). Ali você reabre um cadastro, já conferido, para preencher de novo no Sitra sem ler os documentos outra vez. A cada **Preencher no Sitra** o histórico guarda também as correções feitas no painel. Dá para excluir um cadastro ou **Apagar tudo**.
@@ -81,6 +85,7 @@ Os computadores com a extensão passam a ver o aviso "Nova versão disponível".
   mantém em amarelo campos críticos lidos de texto/mensagem, só aceita telefone/e-mail que estejam escritos nas
   mensagens e recusa `.zip`/arquivos grandes demais. **Sempre confira** a conferência e a tela do Sitra antes de cadastrar.
 - **Histórico:** guarda no Chrome do computador (não vai para nenhum servidor) os dados conferidos de cada cadastro — CPF, CNH, endereço, placas —, sem as fotos e PDFs, e apaga sozinho o que passou de 30 dias. Em computador compartilhado, use **Apagar tudo** ao terminar.
+- **CRM:** a extensão só tem a chave publicável do CRM (a mesma de qualquer página pública dele); sem login ela não lê nenhuma viagem. Quem pode ver o quê é decidido pelas regras do CRM, pela conta do operador. A senha não fica salva, só a sessão ("Sair do CRM" encerra). Busca só as viagens programadas e só as colunas do cruzamento — nunca valores, margem ou pagamento.
 - **Escopo:** a extensão só injeta no Sitra da empresa (`https://2323.aleff.com.br`) e envia para a página apenas
   os campos da tela aberta.
 - **LGPD:** CNH, CPF, endereço e mensagens dos motoristas são enviados ao Google (Gemini) para leitura. Registre essa

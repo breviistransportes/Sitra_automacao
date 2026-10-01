@@ -39,6 +39,21 @@
       <label>Propriedade padrão
         <select id="cfg-propriedade"><option value="1">Da Casa</option><option value="2">Agregado</option><option value="3">Terceiro</option></select>
       </label>
+      <div class="crm-bloco">
+        <h2>CRM — viagens programadas</h2>
+        <p id="crm-status" class="nota"></p>
+        <div id="crm-login" class="crm-login">
+          <label>E-mail do CRM
+            <input id="crm-email" type="email" autocomplete="username">
+          </label>
+          <label>Senha do CRM
+            <input id="crm-senha" type="password" autocomplete="current-password">
+          </label>
+          <button id="crm-entrar" type="button" class="secundario">Entrar no CRM</button>
+        </div>
+        <button id="crm-sair" type="button" class="secundario" hidden>Sair do CRM</button>
+        <small class="nota">Use a sua conta do CRM (logística ou admin). A senha não fica salva. A extensão só lê as viagens programadas para comparar com os documentos — não altera nada no CRM.</small>
+      </div>
       <div class="acoes">
         <button id="cfg-salvar">Salvar</button>
         <button id="cfg-fechar" class="secundario">Fechar</button>
@@ -91,6 +106,7 @@
         <p><strong>Confira os campos.</strong> Os marcados <span class="legenda">conferir</span> (em amarelo) precisam ser checados.</p>
         <p><small id="instrucao-preenchimento">Ordem no Sitra: Proprietário → Veículo → Motorista. Abra a tela e clique em "Preencher".</small></p>
       </div>
+      <div id="cruzamento" hidden aria-live="polite"></div>
       <ul id="avisos" aria-label="Avisos"></ul>
       <form id="form-conferencia"></form>
       <div class="acoes acoes-fixas">

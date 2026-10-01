@@ -31288,6 +31288,123 @@ function lerFormulario(form, aba) {
   return { valores, invalidos, faltando };
 }
 
+// src/lib/crm.js
+var CRM = {
+  url: "https://lpnuuwcidpaojzqhrojh.supabase.co",
+  chave: "sb_publishable_4Xv5flgPrCnGcYbS2-XRbw_zCgpAxeb"
+};
+var COLUNAS_VIAGEM = "id,cliente_nome,origem,destino,data_viagem,data_coleta,motorista,motorista_doc,placa,veiculo_tipo,carroceria";
+var CHAVE_SESSAO = "crm";
+var MARGEM_RENOVACAO_MS = 5 * 6e4;
+var ErroCrm = class extends Error {
+  constructor(mensagem2, { sair: sair2 = false } = {}) {
+    super(mensagem2);
+    this.sair = sair2;
+  }
+};
+async function chamar(caminho, init, fetchFn) {
+  try {
+    return await fetchFn(`${CRM.url}${caminho}`, init);
+  } catch {
+    throw new ErroCrm("Sem conex\xE3o com o CRM.");
+  }
+}
+var cabecalhos = (token) => ({ apikey: CRM.chave, "Content-Type": "application/json", ...token ? { Authorization: `Bearer ${token}` } : {} });
+function sessaoDe(corpo, agora) {
+  return { access_token: corpo.access_token, refresh_token: corpo.refresh_token, expira_em: agora + corpo.expires_in * 1e3, email: corpo.user?.email ?? "" };
+}
+async function entrar(email, senha, { fetchFn = fetch, agora = Date.now() } = {}) {
+  const r = await chamar("/auth/v1/token?grant_type=password", {
+    method: "POST",
+    headers: cabecalhos(),
+    body: JSON.stringify({ email: String(email).trim().toLowerCase(), password: senha })
+  }, fetchFn);
+  const corpo = await r.json().catch(() => ({}));
+  if (r.status === 400 && corpo.error === "invalid_grant") throw new ErroCrm("E-mail ou senha do CRM incorretos.");
+  if (!r.ok) throw new ErroCrm(`O CRM recusou o login (${r.status}): ${corpo.error_description ?? corpo.msg ?? corpo.message ?? "sem detalhes"}`);
+  return sessaoDe(corpo, agora);
+}
+async function renovarSeVencendo(sessao, { fetchFn = fetch, agora = Date.now() } = {}) {
+  if (sessao.expira_em - MARGEM_RENOVACAO_MS > agora) return sessao;
+  const r = await chamar("/auth/v1/token?grant_type=refresh_token", {
+    method: "POST",
+    headers: cabecalhos(),
+    body: JSON.stringify({ refresh_token: sessao.refresh_token })
+  }, fetchFn);
+  const corpo = await r.json().catch(() => ({}));
+  if (!r.ok) throw new ErroCrm("A sess\xE3o do CRM expirou. Entre de novo nas Configura\xE7\xF5es.", { sair: r.status === 400 || r.status === 401 });
+  return sessaoDe(corpo, agora);
+}
+async function viagensProgramadas(sessao, { fetchFn = fetch } = {}) {
+  const params = new URLSearchParams({ select: COLUNAS_VIAGEM, fase: "eq.programado" });
+  const r = await chamar(`/rest/v1/trips?${params}`, { method: "GET", headers: cabecalhos(sessao.access_token) }, fetchFn);
+  if (r.status === 401) throw new ErroCrm("A sess\xE3o do CRM expirou. Entre de novo nas Configura\xE7\xF5es.", { sair: true });
+  if (!r.ok) throw new ErroCrm(`O CRM n\xE3o respondeu as viagens (${r.status}).`);
+  const lista2 = await r.json().catch(() => null);
+  if (!Array.isArray(lista2)) throw new ErroCrm("O CRM respondeu num formato inesperado.");
+  return lista2;
+}
+async function sair(sessao, { fetchFn = fetch } = {}) {
+  await chamar("/auth/v1/logout", { method: "POST", headers: cabecalhos(sessao.access_token) }, fetchFn).catch(() => {
+  });
+}
+async function lerSessao(storage = chrome.storage.local) {
+  const { [CHAVE_SESSAO]: s } = await storage.get(CHAVE_SESSAO);
+  return s?.access_token && s?.refresh_token ? s : null;
+}
+async function salvarSessao(sessao, storage = chrome.storage.local) {
+  if (sessao) await storage.set({ [CHAVE_SESSAO]: sessao });
+  else await storage.remove(CHAVE_SESSAO);
+}
+
+// src/lib/cruzamento.js
+var alfanum2 = (s) => String(s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+var nomeComparavel = (s) => String(s ?? "").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Z]+/g, " ").trim();
+var cpfFormatado = (s) => normalizarCampo(CAMPO_POR_CHAVE.cpf, s ?? "") || String(s ?? "");
+var placaFormatada = (p) => normalizarCampo(CAMPO_POR_CHAVE.veic_placa, p) || p;
+var dataBr = (iso) => /^\d{4}-\d{2}-\d{2}/.test(iso ?? "") ? iso.slice(0, 10).split("-").reverse().join("/") : "";
+function placasDe(texto) {
+  return alfanum2(texto).match(/[A-Z]{3}\d[A-Z0-9]\d{2}/g) ?? [];
+}
+function cruzarComViagens(dados, viagens) {
+  const cpf = somenteDigitos(dados.cpf);
+  const placas = [...new Set((dados.placas ?? []).map(alfanum2).filter(Boolean))];
+  const resultado = [];
+  for (const v of Array.isArray(viagens) ? viagens : []) {
+    const cpfCrm = somenteDigitos(v.motorista_doc);
+    const placasCrm = placasDe(v.placa);
+    const mesmoCpf = !!cpf && cpf === cpfCrm;
+    if (!mesmoCpf && !placasCrm.some((p) => placas.includes(p))) continue;
+    const comparar = (rotulo, crm, documento, iguais) => ({
+      rotulo,
+      crm,
+      documento,
+      status: !documento ? "sem_dado" : iguais ? "ok" : "diferente"
+    });
+    const itens = [
+      comparar("CPF", cpfCrm ? cpfFormatado(cpfCrm) : "", cpf ? cpfFormatado(cpf) : "", mesmoCpf),
+      comparar("Nome", String(v.motorista ?? ""), String(dados.nome ?? ""), nomeComparavel(v.motorista) === nomeComparavel(dados.nome)),
+      ...placasCrm.map((p) => {
+        const tem = placas.includes(p);
+        return { rotulo: `Placa ${placaFormatada(p)}`, crm: placaFormatada(p), documento: tem ? placaFormatada(p) : "", status: tem ? "ok" : "so_crm" };
+      }),
+      ...placas.filter((p) => !placasCrm.includes(p)).map((p) => ({ rotulo: `Placa ${placaFormatada(p)}`, crm: "", documento: placaFormatada(p), status: "so_documento" }))
+    ];
+    resultado.push({
+      mesmoCpf,
+      viagem: {
+        id: v.id,
+        cliente: String(v.cliente_nome ?? ""),
+        trajeto: [v.origem, v.destino].filter(Boolean).join(" \u2192 "),
+        data: dataBr(v.data_coleta) || dataBr(v.data_viagem),
+        veiculo: [v.veiculo_tipo, v.carroceria].filter(Boolean).join(" \xB7 ")
+      },
+      itens
+    });
+  }
+  return resultado.sort((a, b) => Number(b.mesmoCpf) - Number(a.mesmoCpf)).map(({ mesmoCpf, ...r }) => r);
+}
+
 // src/lib/historico.js
 var DIAS_NO_HISTORICO = 30;
 var MAXIMO_NO_HISTORICO = 200;
@@ -31473,6 +31590,7 @@ async function lerDocumentos() {
     preencherLista($("avisos"), avisos);
     registroAtual = null;
     await guardarNoHistorico({ valores: r.valores, veiculos: r.veiculos, avisos });
+    mostrarCruzamento();
     confirmarSobrescrita = false;
     mostrar("conferencia");
   } catch (e) {
@@ -31587,6 +31705,7 @@ async function preencherSitra() {
 }
 function recomecar() {
   arquivos = [];
+  $("cruzamento").hidden = true;
   registroAtual = null;
   atualizarBotaoHistorico();
   $("mensagens").value = "";
@@ -31635,6 +31754,8 @@ $("zona").addEventListener("keydown", (e) => {
 });
 $("btn-ler").addEventListener("click", lerDocumentos);
 $("btn-historico").addEventListener("click", abrirHistorico);
+$("crm-entrar").addEventListener("click", entrarNoCrm);
+$("crm-sair").addEventListener("click", sairDoCrm);
 $("btn-historico-voltar").addEventListener("click", recomecar);
 $("btn-historico-apagar").addEventListener("click", apagarTudo);
 $("mensagens").addEventListener("input", atualizarBotaoLer);
@@ -31717,6 +31838,7 @@ function abrirRegistro(r) {
   confirmarSobrescrita = false;
   mensagem("");
   mostrar("conferencia");
+  mostrarCruzamento();
 }
 async function apagarTudo() {
   const b = $("btn-historico-apagar");
@@ -31728,6 +31850,118 @@ async function apagarTudo() {
   await apagarHistorico().catch(() => {
   });
   abrirHistorico();
+}
+async function atualizarCrmConfig() {
+  const sessao = await lerSessao().catch(() => null);
+  $("crm-status").textContent = sessao ? `Conectado como ${sessao.email}.` : "N\xE3o conectado: entre para comparar os documentos com as viagens programadas.";
+  $("crm-login").hidden = !!sessao;
+  $("crm-sair").hidden = !sessao;
+}
+async function entrarNoCrm() {
+  const email = $("crm-email").value.trim();
+  const senha = $("crm-senha").value;
+  if (!email || !senha) {
+    mensagem("Informe o e-mail e a senha do CRM.");
+    return;
+  }
+  $("crm-entrar").disabled = true;
+  try {
+    await salvarSessao(await entrar(email, senha));
+    mensagem("Conectado ao CRM.", "alerta");
+  } catch (e) {
+    mensagem(e.message);
+  } finally {
+    $("crm-senha").value = "";
+    $("crm-entrar").disabled = false;
+    atualizarCrmConfig();
+  }
+}
+async function sairDoCrm() {
+  const sessao = await lerSessao().catch(() => null);
+  if (sessao) await sair(sessao);
+  await salvarSessao(null).catch(() => {
+  });
+  atualizarCrmConfig();
+}
+async function sessaoDoCrm() {
+  const sessao = await lerSessao().catch(() => null);
+  if (!sessao) return null;
+  try {
+    const nova = await renovarSeVencendo(sessao);
+    if (nova !== sessao) await salvarSessao(nova);
+    return nova;
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {
+    });
+    throw e;
+  }
+}
+var SIMBOLO = { ok: "\u2705", diferente: "\u26A0\uFE0F", so_crm: "\u26A0\uFE0F", so_documento: "\u26A0\uFE0F", sem_dado: "\u2014" };
+function textoDoItem(i) {
+  if (i.status === "ok") return `${SIMBOLO.ok} ${i.rotulo}${i.rotulo.startsWith("Placa") ? "" : `: ${i.crm}`}`;
+  if (i.status === "diferente") return `${SIMBOLO.diferente} ${i.rotulo}: CRM "${i.crm}" \xB7 documento "${i.documento}"`;
+  if (i.status === "so_crm") return `${SIMBOLO.so_crm} ${i.rotulo}: est\xE1 na viagem, mas n\xE3o nos documentos`;
+  if (i.status === "so_documento") return `${SIMBOLO.so_documento} ${i.rotulo}: est\xE1 nos documentos, mas n\xE3o na viagem`;
+  return `${SIMBOLO.sem_dado} ${i.rotulo}: CRM "${i.crm}" \xB7 n\xE3o lido nos documentos`;
+}
+async function mostrarCruzamento() {
+  const caixa = $("cruzamento");
+  const el = (tag, texto, classe) => {
+    const e = document.createElement(tag);
+    if (texto) e.textContent = texto;
+    if (classe) e.className = classe;
+    return e;
+  };
+  const topo = el("div", "", "cruzamento-topo");
+  topo.append(el("strong", "CRM \u2014 viagens programadas"));
+  const nota = (texto) => {
+    caixa.replaceChildren(topo, el("p", texto, "nota"));
+    caixa.hidden = false;
+  };
+  if (modo !== "cadastro") {
+    caixa.hidden = true;
+    return;
+  }
+  let sessao;
+  try {
+    sessao = await sessaoDoCrm();
+  } catch (e) {
+    nota(e.message);
+    return;
+  }
+  if (!sessao) {
+    nota("Entre no CRM nas Configura\xE7\xF5es para comparar com as viagens programadas.");
+    return;
+  }
+  const atualizar = el("button", "Comparar de novo", "secundario");
+  atualizar.type = "button";
+  atualizar.onclick = mostrarCruzamento;
+  topo.append(atualizar);
+  nota("Consultando o CRM\u2026");
+  try {
+    const { valores, veiculos } = dadosDoFormulario($("form-conferencia"));
+    const dados = { cpf: valores.cpf?.valor, nome: valores.nome?.valor, placas: veiculos.map((v) => v.veic_placa?.valor).filter(Boolean) };
+    const achadas = cruzarComViagens(dados, await viagensProgramadas(sessao));
+    if (!achadas.length) {
+      nota("Nenhuma viagem programada com este CPF ou estas placas.");
+      return;
+    }
+    const blocos = achadas.map(({ viagem, itens }) => {
+      const b = el("div", "", "viagem");
+      b.append(el("strong", [viagem.cliente, viagem.data].filter(Boolean).join(" \xB7 ") || "Viagem programada"));
+      const detalhe = [viagem.trajeto, viagem.veiculo].filter(Boolean).join(" \xB7 ");
+      if (detalhe) b.append(el("small", detalhe));
+      const ul = el("ul");
+      for (const i of itens) ul.append(el("li", textoDoItem(i), i.status === "ok" || i.status === "sem_dado" ? "" : "alerta"));
+      b.append(ul);
+      return b;
+    });
+    caixa.replaceChildren(topo, ...blocos);
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {
+    });
+    nota(e.message);
+  }
 }
 async function verificarAtualizacao() {
   try {
@@ -31751,6 +31985,7 @@ async function abrirConfig(aviso = "") {
   $("cfg-emailProprietario").value = cfg.padroes.emailProprietario;
   $("cfg-telefoneProprietario").value = cfg.padroes.telefoneProprietario;
   $("config").hidden = false;
+  atualizarCrmConfig();
   mensagem(aviso, "alerta");
   $("cfg-apiKey").focus();
 }

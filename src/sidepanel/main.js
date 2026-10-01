@@ -6,6 +6,8 @@ import { textoDoPdf } from '../lib/pdf.js';
 import { camposDivergentes } from '../lib/conferencia.js';
 import { lerConfig, salvarConfig } from '../lib/config.js';
 import { montarFormulario, lerFormulario, mostrarAba, abaAtiva, quantidadeVeiculos, rotuloDaAba, dadosDoFormulario } from './formulario.js';
+import { entrar, sair, renovarSeVencendo, viagensProgramadas, lerSessao, salvarSessao } from '../lib/crm.js';
+import { cruzarComViagens } from '../lib/cruzamento.js';
 import { lerHistorico, salvarNoHistorico, excluirDoHistorico, apagarHistorico, resumoDoRegistro } from '../lib/historico.js';
 import { montarFormularioCte, lerFormularioCte } from './formulario-cte.js';
 import { versaoMaior, linkAtualizacaoValido } from '../lib/versao.js';
@@ -117,6 +119,7 @@ async function lerDocumentos() {
     preencherLista($('avisos'), avisos);
     registroAtual = null;
     await guardarNoHistorico({ valores: r.valores, veiculos: r.veiculos, avisos });
+    mostrarCruzamento();
     confirmarSobrescrita = false;
     mostrar('conferencia');
   } catch (e) {
@@ -224,6 +227,7 @@ async function preencherSitra() {
 
 function recomecar() {
   arquivos = [];
+  $('cruzamento').hidden = true;
   registroAtual = null;
   atualizarBotaoHistorico();
   $('mensagens').value = '';
@@ -264,6 +268,8 @@ $('zona').addEventListener('keydown', (e) => {
 });
 $('btn-ler').addEventListener('click', lerDocumentos);
 $('btn-historico').addEventListener('click', abrirHistorico);
+$('crm-entrar').addEventListener('click', entrarNoCrm);
+$('crm-sair').addEventListener('click', sairDoCrm);
 $('btn-historico-voltar').addEventListener('click', recomecar);
 $('btn-historico-apagar').addEventListener('click', apagarTudo);
 $('mensagens').addEventListener('input', atualizarBotaoLer);
@@ -336,6 +342,7 @@ function abrirRegistro(r) {
   confirmarSobrescrita = false;
   mensagem('');
   mostrar('conferencia');
+  mostrarCruzamento();
 }
 
 // Sem confirm() do navegador: o primeiro clique só pede confirmação, o segundo apaga.
@@ -348,6 +355,104 @@ async function apagarTudo() {
   }
   await apagarHistorico().catch(() => {});
   abrirHistorico();
+}
+
+// CRM: login do operador nas Configurações; a sessão (não a senha) fica no Chrome.
+async function atualizarCrmConfig() {
+  const sessao = await lerSessao().catch(() => null);
+  $('crm-status').textContent = sessao ? `Conectado como ${sessao.email}.` : 'Não conectado: entre para comparar os documentos com as viagens programadas.';
+  $('crm-login').hidden = !!sessao;
+  $('crm-sair').hidden = !sessao;
+}
+
+async function entrarNoCrm() {
+  const email = $('crm-email').value.trim();
+  const senha = $('crm-senha').value;
+  if (!email || !senha) { mensagem('Informe o e-mail e a senha do CRM.'); return; }
+  $('crm-entrar').disabled = true;
+  try {
+    await salvarSessao(await entrar(email, senha));
+    mensagem('Conectado ao CRM.', 'alerta');
+  } catch (e) {
+    mensagem(e.message);
+  } finally {
+    $('crm-senha').value = '';
+    $('crm-entrar').disabled = false;
+    atualizarCrmConfig();
+  }
+}
+
+async function sairDoCrm() {
+  const sessao = await lerSessao().catch(() => null);
+  if (sessao) await sair(sessao);
+  await salvarSessao(null).catch(() => {});
+  atualizarCrmConfig();
+}
+
+// Sessão pronta para usar (renovada se estiver vencendo). Recusada pelo CRM: apaga e pede login de novo.
+async function sessaoDoCrm() {
+  const sessao = await lerSessao().catch(() => null);
+  if (!sessao) return null;
+  try {
+    const nova = await renovarSeVencendo(sessao);
+    if (nova !== sessao) await salvarSessao(nova);
+    return nova;
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {});
+    throw e;
+  }
+}
+
+const SIMBOLO = { ok: '✅', diferente: '⚠️', so_crm: '⚠️', so_documento: '⚠️', sem_dado: '—' };
+function textoDoItem(i) {
+  if (i.status === 'ok') return `${SIMBOLO.ok} ${i.rotulo}${i.rotulo.startsWith('Placa') ? '' : `: ${i.crm}`}`;
+  if (i.status === 'diferente') return `${SIMBOLO.diferente} ${i.rotulo}: CRM "${i.crm}" · documento "${i.documento}"`;
+  if (i.status === 'so_crm') return `${SIMBOLO.so_crm} ${i.rotulo}: está na viagem, mas não nos documentos`;
+  if (i.status === 'so_documento') return `${SIMBOLO.so_documento} ${i.rotulo}: está nos documentos, mas não na viagem`;
+  return `${SIMBOLO.sem_dado} ${i.rotulo}: CRM "${i.crm}" · não lido nos documentos`;
+}
+
+// Quadro "viagem programada": compara o que está no painel com o CRM. Só mostra — não preenche nada.
+async function mostrarCruzamento() {
+  const caixa = $('cruzamento');
+  const el = (tag, texto, classe) => { const e = document.createElement(tag); if (texto) e.textContent = texto; if (classe) e.className = classe; return e; };
+  const topo = el('div', '', 'cruzamento-topo');
+  topo.append(el('strong', 'CRM — viagens programadas'));
+  const nota = (texto) => { caixa.replaceChildren(topo, el('p', texto, 'nota')); caixa.hidden = false; };
+  if (modo !== 'cadastro') { caixa.hidden = true; return; }
+  let sessao;
+  try {
+    sessao = await sessaoDoCrm();
+  } catch (e) {
+    nota(e.message);
+    return;
+  }
+  if (!sessao) { nota('Entre no CRM nas Configurações para comparar com as viagens programadas.'); return; }
+  const atualizar = el('button', 'Comparar de novo', 'secundario');
+  atualizar.type = 'button';
+  atualizar.onclick = mostrarCruzamento;
+  topo.append(atualizar);
+  nota('Consultando o CRM…');
+  try {
+    const { valores, veiculos } = dadosDoFormulario($('form-conferencia'));
+    const dados = { cpf: valores.cpf?.valor, nome: valores.nome?.valor, placas: veiculos.map(v => v.veic_placa?.valor).filter(Boolean) };
+    const achadas = cruzarComViagens(dados, await viagensProgramadas(sessao));
+    if (!achadas.length) { nota('Nenhuma viagem programada com este CPF ou estas placas.'); return; }
+    const blocos = achadas.map(({ viagem, itens }) => {
+      const b = el('div', '', 'viagem');
+      b.append(el('strong', [viagem.cliente, viagem.data].filter(Boolean).join(' · ') || 'Viagem programada'));
+      const detalhe = [viagem.trajeto, viagem.veiculo].filter(Boolean).join(' · ');
+      if (detalhe) b.append(el('small', detalhe));
+      const ul = el('ul');
+      for (const i of itens) ul.append(el('li', textoDoItem(i), i.status === 'ok' || i.status === 'sem_dado' ? '' : 'alerta'));
+      b.append(ul);
+      return b;
+    });
+    caixa.replaceChildren(topo, ...blocos);
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {});
+    nota(e.message);
+  }
 }
 
 // Aviso de versão nova publicada no GitHub (Releases). Sem internet ou sem release: não mostra nada.
@@ -376,6 +481,7 @@ async function abrirConfig(aviso = '') {
   $('cfg-emailProprietario').value = cfg.padroes.emailProprietario;
   $('cfg-telefoneProprietario').value = cfg.padroes.telefoneProprietario;
   $('config').hidden = false;
+  atualizarCrmConfig();
   mensagem(aviso, 'alerta');
   $('cfg-apiKey').focus();
 }
