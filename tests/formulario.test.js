@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { montarFormulario, lerFormulario, mostrarAba } from '../src/sidepanel/formulario.js';
+import { montarFormulario, lerFormulario, mostrarAba, abaAtiva } from '../src/sidepanel/formulario.js';
 import { CAMPOS } from '../src/lib/campos.js';
 
 const vazio = () => Object.fromEntries(CAMPOS.map(c => [c.chave, { valor: '', certeza: 'conferir', fonte: '' }]));
 
-function renderizar(valores) {
-  document.body.innerHTML = `<form id="f">${montarFormulario(valores)}</form>`;
+function renderizar(valores, veiculos) {
+  document.body.innerHTML = `<form id="f">${montarFormulario(valores, veiculos)}</form>`;
   return document.getElementById('f');
 }
 
@@ -47,24 +47,24 @@ describe('formulário de conferência', () => {
     const f = renderizar(vazio());
     expect([...f.querySelectorAll('.aba')].map(b => b.textContent)).toEqual(['Motorista', 'Proprietário', 'Veículo']);
     expect(f.querySelector('[data-painel="motorista"]').hidden).toBe(false);
-    expect(f.querySelector('[data-painel="veiculo"]').hidden).toBe(true);
-    expect(f.querySelector('[data-painel="veiculo"] select[name="c_veic_tipo"] option[value="8"]').textContent).toBe('Cavalo');
+    expect(f.querySelector('[data-painel="veiculo:0"]').hidden).toBe(true);
+    expect(f.querySelector('[data-painel="veiculo:0"] select[name="c_veic_tipo__0"] option[value="8"]').textContent).toBe('Cavalo');
     expect(f.querySelector('[data-painel="proprietario"] select[name="c_prop_tipo_conta"]')).not.toBeNull();
   });
 
   it('mostrarAba troca a aba visível', () => {
     const f = renderizar(vazio());
-    mostrarAba(f, 'veiculo');
-    expect(f.querySelector('[data-painel="veiculo"]').hidden).toBe(false);
+    mostrarAba(f, 'veiculo:0');
+    expect(f.querySelector('[data-painel="veiculo:0"]').hidden).toBe(false);
     expect(f.querySelector('[data-painel="motorista"]').hidden).toBe(true);
-    expect(f.querySelector('.aba[data-tela="veiculo"]').classList.contains('ativa')).toBe(true);
+    expect(f.querySelector('.aba[data-tela="veiculo:0"]').classList.contains('ativa')).toBe(true);
   });
 
   it('com a tela informada, inválidos e faltando são só daquela tela', () => {
     const f = renderizar(vazio());
     f.elements.c_data_nascimento.value = '31/02/1990';
-    f.elements.c_veic_ano_fab.value = '19';
-    const { invalidos, faltando } = lerFormulario(f, 'veiculo');
+    f.elements.c_veic_ano_fab__0.value = '19';
+    const { invalidos, faltando } = lerFormulario(f, 'veiculo:0');
     expect(invalidos).toEqual(['Ano Fab.']);
     expect(faltando).toContain('Chassi');
     expect(faltando).not.toContain('CPF');
@@ -77,5 +77,39 @@ describe('formulário de conferência', () => {
     expect(invalidos).toEqual(['Data de Nascimento']);
     expect(faltando).toContain('CPF');
     expect(faltando).not.toContain('Complemento');
+  });
+
+  describe('cavalo + carreta', () => {
+    const veiculo = (placa, tipo) => {
+      const v = Object.fromEntries(CAMPOS.filter(c => c.tela === 'veiculo').map(c => [c.chave, { valor: '', certeza: 'conferir', fonte: '' }]));
+      v.veic_placa = { valor: placa, certeza: 'alta', fonte: 'CRLV.pdf' };
+      v.veic_tipo = { valor: tipo, certeza: 'alta', fonte: 'CRLV.pdf' };
+      return v;
+    };
+    const dois = () => renderizar(vazio(), [veiculo('ABC-1D23', '8'), veiculo('XYZ-9K87', '4')]);
+
+    it('uma aba por veículo, com tipo e placa', () => {
+      const f = dois();
+      expect([...f.querySelectorAll('.aba')].map(b => b.textContent))
+        .toEqual(['Motorista', 'Proprietário', 'Veículo 1 · Cavalo ABC-1D23', 'Veículo 2 · Carreta XYZ-9K87']);
+      expect(f.elements.c_veic_placa__1.value).toBe('XYZ-9K87');
+    });
+
+    it('lê só o veículo da aba pedida, junto com os demais campos', () => {
+      const f = dois();
+      const { valores, faltando } = lerFormulario(f, 'veiculo:1');
+      expect(valores.veic_placa).toBe('XYZ-9K87');
+      expect(valores.veic_tipo).toBe('4');
+      expect(faltando).toContain('Chassi');
+      expect(lerFormulario(f, 'motorista').valores.veic_placa).toBe('ABC-1D23');
+    });
+
+    it('abaAtiva diz qual aba está aberta', () => {
+      const f = dois();
+      expect(abaAtiva(f)).toBe('motorista');
+      mostrarAba(f, 'veiculo:1');
+      expect(abaAtiva(f)).toBe('veiculo:1');
+      expect(f.querySelector('[data-painel="veiculo:0"]').hidden).toBe(true);
+    });
   });
 });

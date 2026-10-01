@@ -95,13 +95,12 @@ describe('integração', () => {
   it('posProcessar aplica dupla leitura e texto do PDF antes das regras', () => {
     const r = posProcessar({ campos: {
       registro_cnh: { valor: '04123456789', certeza: 'alta', fonte: 'CNH-e.pdf' },
-      veic_placa: { valor: 'ABC1D28', certeza: 'alta', fonte: 'CRV.pdf' },
-    }, documentos_encontrados: [], avisos: [] }, { propriedade: '3', nacionalidade: 'BRASILEIRA' }, {
+    }, veiculos: [{ veic_placa: { valor: 'ABC1D28', certeza: 'alta', fonte: 'CRV.pdf' } }], documentos_encontrados: [], avisos: [] }, { propriedade: '3', nacionalidade: 'BRASILEIRA' }, {
       segundaLeitura: { registro_cnh: '04123456789' },
       textoPdf: CRLV,
     });
     expect(r.valores.registro_cnh.certeza).toBe('alta');
-    expect(r.valores.veic_placa.valor).toBe('ABC-1D23');
+    expect(r.veiculos[0].veic_placa.valor).toBe('ABC-1D23');
     expect(r.valores.placa.valor).toBe('ABC-1D23'); // regra copia a placa já corrigida para o motorista
   });
 

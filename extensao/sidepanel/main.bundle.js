@@ -2936,7 +2936,7 @@ var NO_TEXTO_DO_PDF = {
   veic_chassi: /(?<![A-Z0-9])[A-Z0-9]{17}(?![A-Z0-9])/g,
   veic_certificado: /(?<!\d)\d{9,15}(?!\d)/g
 };
-function conferirComTextoPdf(valores, textoPdf, avisos) {
+function conferirComTextoPdf(valores, textoPdf, avisos, prefixo = "") {
   const texto = String(textoPdf ?? "").toUpperCase();
   if ((texto.match(/\d/g) ?? []).length < 40) return valores;
   const compacto = alfanum(texto);
@@ -2955,10 +2955,10 @@ function conferirComTextoPdf(valores, textoPdf, avisos) {
     const unico = melhor && (candidatos.length === 1 || candidatos[1].d > melhor.d);
     if (melhor && melhor.d <= 2 && unico) {
       const novo = normalizarCampo(campo2, melhor.c);
-      avisos.push(`${campo2.rotulo}: corrigido pelo texto do PDF (${atual.valor} \u2192 ${novo})`);
+      avisos.push(`${prefixo}${campo2.rotulo}: corrigido pelo texto do PDF (${atual.valor} \u2192 ${novo})`);
       v[chave] = { valor: novo, certeza: "alta", fonte: "texto exato do PDF" };
     } else {
-      avisos.push(`${campo2.rotulo}: n\xE3o confere com o texto do PDF \u2014 confira`);
+      avisos.push(`${prefixo}${campo2.rotulo}: n\xE3o confere com o texto do PDF \u2014 confira`);
       v[chave] = { ...atual, certeza: "conferir" };
     }
   }
@@ -3013,6 +3013,8 @@ function desempatar(valores, segunda, terceira, avisos) {
 // src/lib/extrator.js
 var MODELO = "gemini-3.8-flash";
 var CAMPOS_IA = CAMPOS.filter((c) => c.ia);
+var CAMPOS_GERAIS = CAMPOS.filter((c) => c.tela !== "veiculo");
+var CAMPOS_VEICULO = CAMPOS.filter((c) => c.tela === "veiculo");
 var ErroExtracao = class extends Error {
 };
 var INSTRUCOES = `Voc\xEA extrai dados de documentos de motoristas brasileiros para o cadastro no sistema Sitra.
@@ -3044,7 +3046,10 @@ Propriet\xE1rio (campos prop_*):
 - S\xF3 use o PROPRIET\xC1RIO do CRV/CRLV (nome e CPF/CNPJ) se n\xE3o houver cart\xE3o da ANTT.
 - prop_rg / prop_org_exp: s\xF3 se houver documento de identidade do propriet\xE1rio.
 
-Ve\xEDculo (campos veic_*), do CRV/CRLV:
+Ve\xEDculos (lista veiculos, campos veic_*), do CRV/CRLV:
+- Um item em veiculos para CADA ve\xEDculo, ou seja, cada CRV/CRLV de placa diferente: cavalo e carreta (ou cavalo e duas carretas, no bitrem) s\xE3o ve\xEDculos separados, cada um com seus pr\xF3prios dados. Nunca misture dados de dois CRLVs no mesmo item.
+- O mesmo ve\xEDculo em mais de um arquivo (frente e verso, foto e PDF) \xE9 um item s\xF3.
+- Sem nenhum CRV/CRLV, veiculos fica [].
 - veic_placa, veic_renavam (C\xD3DIGO RENAVAM), veic_chassi, veic_cor, veic_ano_fab, veic_ano_modelo.
 - MARCA/MODELO/VERS\xC3O: veic_marca = parte antes da "/", veic_modelo = o restante.
 - veic_certificado = n\xFAmero do CRV/CRLV (n\xFAmero do documento, n\xE3o o RENAVAM).
@@ -3074,19 +3079,25 @@ function montarSchema() {
     required: ["valor", "certeza", "fonte"],
     additionalProperties: false
   };
+  const objeto = (campos) => {
+    const daIa = campos.filter((c) => c.ia);
+    return {
+      type: "object",
+      properties: Object.fromEntries(daIa.map((c) => [c.chave, c.opcoes ? { ...campo2, properties: { ...campo2.properties, valor: { type: "string", enum: [...c.opcoes.map((o) => o[1]), ""] } }, description: c.dica } : { ...campo2, description: c.dica }])),
+      required: daIa.map((c) => c.chave),
+      additionalProperties: false
+    };
+  };
   return {
     type: "object",
     properties: {
-      campos: {
-        type: "object",
-        properties: Object.fromEntries(CAMPOS_IA.map((c) => [c.chave, c.opcoes ? { ...campo2, properties: { ...campo2.properties, valor: { type: "string", enum: [...c.opcoes.map((o) => o[1]), ""] } }, description: c.dica } : { ...campo2, description: c.dica }])),
-        required: CAMPOS_IA.map((c) => c.chave),
-        additionalProperties: false
-      },
+      campos: objeto(CAMPOS_GERAIS),
+      // Um item por CRV/CRLV: cavalo e carreta são dois cadastros de veículo no Sitra.
+      veiculos: { type: "array", items: objeto(CAMPOS_VEICULO) },
       documentos_encontrados: { type: "array", items: { type: "string" } },
       avisos: { type: "array", items: { type: "string" } }
     },
-    required: ["campos", "documentos_encontrados", "avisos"],
+    required: ["campos", "veiculos", "documentos_encontrados", "avisos"],
     additionalProperties: false
   };
 }
@@ -3176,26 +3187,28 @@ function contatoNoTexto(campo2, valor, texto) {
   return somenteDigitos(texto).includes(somenteDigitos(valor));
 }
 function posProcessar(bruto, padroes, { hoje = /* @__PURE__ */ new Date(), textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura } = {}) {
-  const valores = {};
   const avisos = [...bruto?.avisos ?? []];
-  for (const campo2 of CAMPOS) {
-    const b = bruto?.campos?.[campo2.chave];
+  const lerCampos = (campos, origem, prefixo) => {
+    const lidos = {};
+    for (const campo2 of campos) lerCampo(campo2, origem?.[campo2.chave], prefixo(campo2), lidos);
+    return lidos;
+  };
+  const lerCampo = (campo2, b, nome, valores2) => {
     let valor = normalizarCampo(campo2, b?.valor ?? "");
     let certeza = b?.certeza === "alta" ? "alta" : "conferir";
     let fonte = nomeSeguro(b?.fonte ?? "");
-    const nome = campo2.tela === "motorista" ? campo2.rotulo : `${TELAS[campo2.tela].rotulo} \u2014 ${campo2.rotulo}`;
     const descartar = (motivo) => {
       avisos.push(`${nome}: ignorado "${String(b.valor).slice(0, 60)}" ${motivo}`);
-      valores[campo2.chave] = { valor: "", certeza: "conferir", fonte: "" };
+      valores2[campo2.chave] = { valor: "", certeza: "conferir", fonte: "" };
     };
     if (CONTATOS.includes(campo2.chave) && b?.valor) {
       if (DE_DOCUMENTO.test((b.fonte ?? "").trim())) {
         descartar(`de ${fonte} \u2014 telefone e e-mail s\xF3 valem das mensagens`);
-        continue;
+        return;
       }
       if (textoConfiavel !== void 0 && valor && !contatoNoTexto(campo2, valor, textoConfiavel)) {
         descartar("\u2014 n\xE3o aparece nas mensagens");
-        continue;
+        return;
       }
     }
     if (b?.valor && TEM_CARACTERE_SUSPEITO.test(b.valor)) {
@@ -3211,8 +3224,12 @@ function posProcessar(bruto, padroes, { hoje = /* @__PURE__ */ new Date(), texto
       fonte = "padr\xE3o";
     }
     if (!valor) certeza = "conferir";
-    valores[campo2.chave] = { valor, certeza, fonte };
-  }
+    valores2[campo2.chave] = { valor, certeza, fonte };
+  };
+  const valores = lerCampos(CAMPOS_GERAIS, bruto?.campos, (c) => c.tela === "motorista" ? c.rotulo : `${TELAS[c.tela].rotulo} \u2014 ${c.rotulo}`);
+  const brutos = veiculosBrutos(bruto?.veiculos);
+  const rotuloVeiculo2 = (i) => brutos.length > 1 ? `Ve\xEDculo ${i + 1}` : "Ve\xEDculo";
+  const veiculos = brutos.map((b, i) => lerCampos(CAMPOS_VEICULO, b, (c) => `${rotuloVeiculo2(i)} \u2014 ${c.rotulo}`));
   if (!valores.fone_residencial.valor && valores.celular.valor) {
     valores.fone_residencial = { ...valores.celular, fonte: "igual ao celular" };
   }
@@ -3234,8 +3251,31 @@ function posProcessar(bruto, padroes, { hoje = /* @__PURE__ */ new Date(), texto
   const segundaSemDivergentes = segundaLeitura && Object.fromEntries(Object.entries(segundaLeitura).filter(([k]) => !divergentes.includes(k)));
   let conferidos = compararLeituras(valores, segundaSemDivergentes, avisos);
   if (terceiraLeitura) conferidos = desempatar(conferidos, segundaLeitura, terceiraLeitura, avisos);
-  conferidos = conferirComTextoPdf(conferidos, textoPdf, avisos);
-  return { valores: aplicarRegras(conferidos, { hoje, padroes }), avisos, documentos: bruto?.documentos_encontrados ?? [] };
+  const veiculosConferidos = veiculos.map((v, i) => conferirComTextoPdf(v, textoPdf, avisos, brutos.length > 1 ? `${rotuloVeiculo2(i)} \u2014 ` : ""));
+  const comRegras = veiculosConferidos.map((v) => aplicarRegras({ ...conferidos, ...v }, { hoje, padroes }));
+  const geral = Object.fromEntries(Object.entries(comRegras[0]).filter(([k]) => !k.startsWith("veic_")));
+  return {
+    valores: geral,
+    veiculos: comRegras.map((v) => valoresDaTela(v, "veiculo")),
+    avisos,
+    documentos: bruto?.documentos_encontrados ?? []
+  };
+}
+var placaDe = (b) => String(b?.veic_placa?.valor ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+var ehCarreta = (b) => /carreta|reboque/i.test(String(b?.veic_tipo?.valor ?? ""));
+function veiculosBrutos(lista2) {
+  const juntos = [];
+  for (const b of Array.isArray(lista2) ? lista2 : []) {
+    if (!b || !Object.values(b).some((c) => String(c?.valor ?? "").trim())) continue;
+    const igual = placaDe(b) && juntos.find((j) => placaDe(j) === placaDe(b));
+    if (!igual) {
+      juntos.push({ ...b });
+      continue;
+    }
+    for (const [chave, c] of Object.entries(b)) if (!String(igual[chave]?.valor ?? "").trim()) igual[chave] = c;
+  }
+  const ordenados = [...juntos.filter((b) => !ehCarreta(b)), ...juntos.filter(ehCarreta)];
+  return ordenados.length ? ordenados : [{}];
 }
 
 // src/lib/campos-cte.js
@@ -31178,8 +31218,10 @@ async function salvarConfig(cfg, storage = chrome.storage.local) {
 var PROPRIEDADES = [["1", "Da Casa"], ["2", "Agregado"], ["3", "Terceiro"]];
 var ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 var esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
-function controle(campo2, valor) {
-  const nome = `c_${campo2.chave}`;
+var indiceVeiculo = (aba) => String(aba ?? "").startsWith("veiculo:") ? Number(aba.slice(8)) : 0;
+var telaDaAba = (aba) => String(aba).split(":")[0];
+var nomeDoCampo = (campo2, i) => campo2.tela === "veiculo" ? `c_${campo2.chave}__${i}` : `c_${campo2.chave}`;
+function controle(campo2, valor, nome) {
   const opcoes = (lista2) => lista2.map(([v, t]) => `<option value="${esc(v)}"${v === valor ? " selected" : ""}>${esc(t)}</option>`).join("");
   const select = (lista2) => `<select name="${nome}"><option value="">\u2014</option>${opcoes(lista2)}</select>`;
   if (campo2.tipo === "uf") return select(UFS.map((u) => [u, u]));
@@ -31187,28 +31229,42 @@ function controle(campo2, valor) {
   if (campo2.tipo === "opcao") return select(campo2.opcoes);
   return `<input name="${nome}" value="${esc(valor)}" autocomplete="off">`;
 }
-function painel(tela, valores) {
+function painel(tela, valores, i = 0) {
   const campos = camposDaTela(tela);
   const grupos = [...new Set(campos.map((c) => c.grupo))];
   return grupos.map((g) => `<fieldset><legend>${esc(g)}</legend>${campos.filter((c) => c.grupo === g).map((c) => {
     const v = valores[c.chave] ?? { valor: "", certeza: "conferir", fonte: "" };
-    return `<label class="campo${v.certeza === "conferir" ? " conferir" : ""}"><span>${esc(c.rotulo)}${c.obrigatorio ? " *" : ""}</span>${controle(c, v.valor)}${v.fonte ? `<small>${esc(v.fonte)}</small>` : ""}</label>`;
+    return `<label class="campo${v.certeza === "conferir" ? " conferir" : ""}"><span>${esc(c.rotulo)}${c.obrigatorio ? " *" : ""}</span>${controle(c, v.valor, nomeDoCampo(c, i))}${v.fonte ? `<small>${esc(v.fonte)}</small>` : ""}</label>`;
   }).join("")}</fieldset>`).join("");
 }
-function montarFormulario(valores) {
-  const telas = Object.keys(TELAS);
-  const abas = telas.map((t, i) => `<button type="button" class="aba${i === 0 ? " ativa" : ""}" data-tela="${t}">${esc(TELAS[t].rotulo)}</button>`).join("");
-  const paineis = telas.map((t, i) => `<div data-painel="${t}"${i === 0 ? "" : " hidden"}>${painel(t, valores)}</div>`).join("");
-  return `<div class="abas">${abas}</div>${paineis}`;
+function rotuloVeiculo(v, i, total) {
+  if (total === 1) return TELAS.veiculo.rotulo;
+  const tipo = CAMPO_POR_CHAVE.veic_tipo.opcoes.find(([valor]) => valor === v.veic_tipo?.valor)?.[1] ?? "";
+  return [`Ve\xEDculo ${i + 1} \xB7`, tipo, v.veic_placa?.valor].filter(Boolean).join(" ");
 }
-function mostrarAba(form, tela) {
-  for (const b of form.querySelectorAll(".aba")) b.classList.toggle("ativa", b.dataset.tela === tela);
-  for (const p of form.querySelectorAll("[data-painel]")) p.hidden = p.dataset.painel !== tela;
+function montarFormulario(valores, veiculos = [valores]) {
+  const lista2 = veiculos.length ? veiculos : [{}];
+  const abas = [
+    ...Object.keys(TELAS).filter((t) => t !== "veiculo").map((t) => ({ aba: t, rotulo: TELAS[t].rotulo, html: painel(t, valores) })),
+    ...lista2.map((v, i) => ({ aba: `veiculo:${i}`, rotulo: rotuloVeiculo(v, i, lista2.length), html: painel("veiculo", v, i) }))
+  ];
+  const botoes = abas.map((a, i) => `<button type="button" class="aba${i === 0 ? " ativa" : ""}" data-tela="${a.aba}">${esc(a.rotulo)}</button>`).join("");
+  const paineis = abas.map((a, i) => `<div data-painel="${a.aba}"${i === 0 ? "" : " hidden"}>${a.html}</div>`).join("");
+  return `<div class="abas">${botoes}</div>${paineis}`;
 }
-function lerFormulario(form, tela) {
+function mostrarAba(form, aba) {
+  for (const b of form.querySelectorAll(".aba")) b.classList.toggle("ativa", b.dataset.tela === aba);
+  for (const p of form.querySelectorAll("[data-painel]")) p.hidden = p.dataset.painel !== aba;
+}
+var abaAtiva = (form) => form.querySelector(".aba.ativa")?.dataset.tela ?? null;
+var quantidadeVeiculos = (form) => form.querySelectorAll('[data-painel^="veiculo:"]').length;
+var rotuloDaAba = (form, aba) => form.querySelector(`.aba[data-tela="${aba}"]`)?.textContent ?? "";
+function lerFormulario(form, aba) {
+  const i = indiceVeiculo(aba);
+  const tela = aba ? telaDaAba(aba) : null;
   const valores = {}, invalidos = [], faltando = [];
   for (const c of CAMPOS) {
-    const bruto = form.elements[`c_${c.chave}`]?.value ?? "";
+    const bruto = form.elements[nomeDoCampo(c, i)]?.value ?? "";
     const v = normalizarCampo(c, bruto);
     valores[c.chave] = v;
     if (tela && c.tela !== tela) continue;
@@ -31354,7 +31410,7 @@ async function lerDocumentos() {
     const segundaLeitura = segunda.erro ? null : segunda;
     const terceiraLeitura = camposDivergentes(bruto?.campos, segundaLeitura).length ? await chamarGeminiConferencia(cfg.apiKey, docs).catch(() => null) : null;
     const r = posProcessar(bruto, cfg.padroes, { textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura });
-    $("form-conferencia").innerHTML = montarFormulario(r.valores);
+    $("form-conferencia").innerHTML = montarFormulario(r.valores, r.veiculos);
     const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(", ")}`] : [];
     preencherLista($("avisos"), [...docsLidos, ...avisosEntrada, ...r.avisos]);
     confirmarSobrescrita = false;
@@ -31373,9 +31429,9 @@ async function executarNoSitra(func, args = []) {
   return r.result;
 }
 var STATUS = { ok: "\u2705", sitra: "\u{1F535} veio do Sitra (CEP) \u2014", falhou: "\u26A0\uFE0F n\xE3o gravou \u2014", vazio: "\u26A0\uFE0F obrigat\xF3rio vazio \u2014" };
-function mostrarRelatorio(rel) {
+function mostrarRelatorio(rel, rotuloTela = TELAS[rel.tela]?.rotulo) {
   const sucessoCte = rel.ok && rel.tela === "cte";
-  $("resultado-titulo").textContent = sucessoCte ? "Pronto! Confira a Digita\xE7\xE3o de CT-e, informe o respons\xE1vel pelo frete combinado e s\xF3 ent\xE3o decida se deve cadastrar." : rel.ok ? `Pronto! Confira a tela de ${TELAS[rel.tela].rotulo} no Sitra e clique em "Cadastrar".` : `Parou: ${rel.erro}`;
+  $("resultado-titulo").textContent = sucessoCte ? "Pronto! Confira a Digita\xE7\xE3o de CT-e, informe o respons\xE1vel pelo frete combinado e s\xF3 ent\xE3o decida se deve cadastrar." : rel.ok ? `Pronto! Confira a tela de ${rotuloTela} no Sitra e clique em "Cadastrar".` : `Parou: ${rel.erro}`;
   const linhas = [
     ...rel.avisos,
     ...rel.campos.map((c) => `${STATUS[c.status]} ${c.rotulo}${c.status === "falhou" ? ` (esperado "${c.esperado}", ficou "${c.obtido}")` : ""}`)
@@ -31428,9 +31484,19 @@ async function preencherSitra() {
     return;
   }
   const form = $("form-conferencia");
-  mostrarAba(form, est.tela);
-  const { valores, invalidos, faltando } = lerFormulario(form, est.tela);
-  const rotuloTela = TELAS[est.tela].rotulo;
+  let aba = est.tela;
+  if (est.tela === "veiculo") {
+    const ativa = abaAtiva(form);
+    if (ativa?.startsWith("veiculo:")) aba = ativa;
+    else if (quantidadeVeiculos(form) > 1) {
+      mostrarAba(form, "veiculo:0");
+      mensagem('H\xE1 mais de um ve\xEDculo. Abra no painel a aba do ve\xEDculo que vai cadastrar e clique em "Preencher no Sitra" de novo.', "alerta");
+      return;
+    } else aba = "veiculo:0";
+  }
+  mostrarAba(form, aba);
+  const { valores, invalidos, faltando } = lerFormulario(form, aba);
+  const rotuloTela = est.tela === "veiculo" ? rotuloDaAba(form, aba) : TELAS[est.tela].rotulo;
   if (invalidos.length) {
     mensagem(`Formato inv\xE1lido (${rotuloTela}): ${invalidos.join(", ")}`);
     return;
@@ -31450,7 +31516,7 @@ async function preencherSitra() {
   $("btn-preencher").disabled = true;
   $("btn-preencher").textContent = "Preenchendo\u2026";
   try {
-    mostrarRelatorio(await executarNoSitra((v) => window.__cadastroMotorista.preencher(v), [valoresDaTela(valores, est.tela)]));
+    mostrarRelatorio(await executarNoSitra((v) => window.__cadastroMotorista.preencher(v), [valoresDaTela(valores, est.tela)]), rotuloTela);
   } catch (e) {
     mensagem(`Falha ao preencher: ${e.message}`);
   } finally {
@@ -31479,7 +31545,7 @@ function aplicarModo(novoModo) {
   $("titulo-upload").textContent = cte ? "Solte aqui a nota do CT-e" : "Solte aqui os documentos do motorista";
   $("texto-upload").textContent = cte ? "foto ou PDF \u2014 ou clique para escolher" : "fotos, PDFs ou o .zip da conversa \u2014 ou clique para escolher";
   $("bloco-mensagens").hidden = cte;
-  $("instrucao-preenchimento").textContent = cte ? "No Sitra, abra Digita\xE7\xE3o de CT-e e escolha o Tipo de Frete antes de preencher." : 'Ordem no Sitra: Propriet\xE1rio \u2192 Ve\xEDculo \u2192 Motorista. Abra a tela e clique em "Preencher".';
+  $("instrucao-preenchimento").textContent = cte ? "No Sitra, abra Digita\xE7\xE3o de CT-e e escolha o Tipo de Frete antes de preencher." : 'Ordem no Sitra: Propriet\xE1rio \u2192 Ve\xEDculo (um cadastro por placa: cavalo e carreta) \u2192 Motorista. Abra a tela e clique em "Preencher".';
   $("btn-preencher").textContent = cte ? "Preencher CT-e" : "Preencher no Sitra";
   $("btn-novo").textContent = cte ? "Pr\xF3ximo CT-e" : "Pr\xF3ximo motorista";
   recomecar();

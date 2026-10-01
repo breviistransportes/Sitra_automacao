@@ -191,12 +191,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 
 .abas {
   position: sticky; top: 0; z-index: 2;
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 3px; margin-bottom: 4px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 2px; padding: 3px; margin-bottom: 4px;
   background: var(--surface-2); border-radius: var(--radius-sm);
 }
 .abas::before { content: ""; position: absolute; inset: -6px -16px auto; height: 6px; background: var(--bg); }
 .aba {
-  min-height: 30px; padding: 0 8px; font-size: 12.5px; font-weight: 550;
+  min-height: 30px; padding: 4px 8px; font-size: 12.5px; font-weight: 550; line-height: 1.25;
   color: var(--muted); background: transparent; border-radius: 6px;
 }
 .aba:hover:not(:disabled) { color: var(--text); background: transparent; }

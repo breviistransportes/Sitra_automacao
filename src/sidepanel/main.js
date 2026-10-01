@@ -5,7 +5,7 @@ import { chamarGeminiCte, posProcessarCte } from '../lib/extrator-cte.js';
 import { textoDoPdf } from '../lib/pdf.js';
 import { camposDivergentes } from '../lib/conferencia.js';
 import { lerConfig, salvarConfig } from '../lib/config.js';
-import { montarFormulario, lerFormulario, mostrarAba } from './formulario.js';
+import { montarFormulario, lerFormulario, mostrarAba, abaAtiva, quantidadeVeiculos, rotuloDaAba } from './formulario.js';
 import { montarFormularioCte, lerFormularioCte } from './formulario-cte.js';
 import { versaoMaior, linkAtualizacaoValido } from '../lib/versao.js';
 import { TELAS, CAMPO_POR_CHAVE, ehSitra, valoresDaTela } from '../lib/campos.js';
@@ -108,7 +108,7 @@ async function lerDocumentos() {
       ? await chamarGeminiConferencia(cfg.apiKey, docs).catch(() => null)
       : null;
     const r = posProcessar(bruto, cfg.padroes, { textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura });
-    $('form-conferencia').innerHTML = montarFormulario(r.valores);
+    $('form-conferencia').innerHTML = montarFormulario(r.valores, r.veiculos);
     const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(', ')}`] : [];
     preencherLista($('avisos'), [...docsLidos, ...avisosEntrada, ...r.avisos]);
     confirmarSobrescrita = false;
@@ -131,12 +131,12 @@ async function executarNoSitra(func, args = []) {
 
 const STATUS = { ok: '✅', sitra: '🔵 veio do Sitra (CEP) —', falhou: '⚠️ não gravou —', vazio: '⚠️ obrigatório vazio —' };
 
-function mostrarRelatorio(rel) {
+function mostrarRelatorio(rel, rotuloTela = TELAS[rel.tela]?.rotulo) {
   const sucessoCte = rel.ok && rel.tela === 'cte';
   $('resultado-titulo').textContent = sucessoCte
     ? 'Pronto! Confira a Digitação de CT-e, informe o responsável pelo frete combinado e só então decida se deve cadastrar.'
     : rel.ok
-    ? `Pronto! Confira a tela de ${TELAS[rel.tela].rotulo} no Sitra e clique em "Cadastrar".`
+    ? `Pronto! Confira a tela de ${rotuloTela} no Sitra e clique em "Cadastrar".`
     : `Parou: ${rel.erro}`;
   const linhas = [
     ...rel.avisos,
@@ -176,9 +176,21 @@ async function preencherSitra() {
   if (!est?.tela) { mensagem('Abra no Sitra a tela de Cadastro de Motorista, de Proprietário ou de Veículo nesta aba.'); return; }
 
   const form = $('form-conferencia');
-  mostrarAba(form, est.tela);
-  const { valores, invalidos, faltando } = lerFormulario(form, est.tela);
-  const rotuloTela = TELAS[est.tela].rotulo;
+  // Tela de Veículo: preenche o veículo da aba aberta no painel (cavalo e carreta são cadastros separados).
+  let aba = est.tela;
+  if (est.tela === 'veiculo') {
+    const ativa = abaAtiva(form);
+    if (ativa?.startsWith('veiculo:')) aba = ativa;
+    else if (quantidadeVeiculos(form) > 1) {
+      mostrarAba(form, 'veiculo:0');
+      mensagem('Há mais de um veículo. Abra no painel a aba do veículo que vai cadastrar e clique em "Preencher no Sitra" de novo.', 'alerta');
+      return;
+    }
+    else aba = 'veiculo:0';
+  }
+  mostrarAba(form, aba);
+  const { valores, invalidos, faltando } = lerFormulario(form, aba);
+  const rotuloTela = est.tela === 'veiculo' ? rotuloDaAba(form, aba) : TELAS[est.tela].rotulo;
   if (invalidos.length) { mensagem(`Formato inválido (${rotuloTela}): ${invalidos.join(', ')}`); return; }
   const doc = DOCUMENTO[est.tela];
   if (!valores[doc]) { mensagem(`${CAMPO_POR_CHAVE[doc].rotulo} é obrigatório para preencher a tela de ${rotuloTela}.`); return; }
@@ -193,7 +205,7 @@ async function preencherSitra() {
   $('btn-preencher').disabled = true;
   $('btn-preencher').textContent = 'Preenchendo…';
   try {
-    mostrarRelatorio(await executarNoSitra((v) => window.__cadastroMotorista.preencher(v), [valoresDaTela(valores, est.tela)]));
+    mostrarRelatorio(await executarNoSitra((v) => window.__cadastroMotorista.preencher(v), [valoresDaTela(valores, est.tela)]), rotuloTela);
   } catch (e) {
     mensagem(`Falha ao preencher: ${e.message}`);
   } finally {
@@ -226,7 +238,7 @@ function aplicarModo(novoModo) {
   $('bloco-mensagens').hidden = cte;
   $('instrucao-preenchimento').textContent = cte
     ? 'No Sitra, abra Digitação de CT-e e escolha o Tipo de Frete antes de preencher.'
-    : 'Ordem no Sitra: Proprietário → Veículo → Motorista. Abra a tela e clique em "Preencher".';
+    : 'Ordem no Sitra: Proprietário → Veículo (um cadastro por placa: cavalo e carreta) → Motorista. Abra a tela e clique em "Preencher".';
   $('btn-preencher').textContent = cte ? 'Preencher CT-e' : 'Preencher no Sitra';
   $('btn-novo').textContent = cte ? 'Próximo CT-e' : 'Próximo motorista';
   recomecar();

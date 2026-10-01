@@ -34,6 +34,8 @@ Baixe o `.zip`, extraia **por cima da mesma pasta** e, em `chrome://extensions`,
 2. Arraste os documentos (fotos, PDFs ou `.zip`) e, se houver, cole as mensagens do motorista
    em **Informações adicionais** (telefone e e-mail só são lidos das mensagens).
 3. **Ler documentos** → confira as abas **Motorista / Proprietário / Veículo** (amarelo = conferir).
+   Com cavalo e carreta, cada CRLV vira uma aba (**Veículo 1 · Cavalo …**, **Veículo 2 · Carreta …**): são cadastros separados no Sitra.
+   Na tela de Veículo, o painel preenche o veículo da aba que estiver aberta — cadastre um, troque de aba, abra a tela de novo e preencha o outro.
 4. No Sitra, abra a tela (Proprietário, depois Veículo, depois Motorista) e clique em **Preencher no Sitra**.
 5. Confira a tela do Sitra e clique em **Cadastrar**.
 
