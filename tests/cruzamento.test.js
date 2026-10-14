@@ -45,6 +45,12 @@ describe('cruzarComViagens', () => {
     expect(r.itens.find(i => i.rotulo === 'Nome').status).toBe('sem_dado');
   });
 
+  it('viagem do CRM sem CPF ou sem nome: "sem_crm", não "diferente"', () => {
+    const [r] = cruzarComViagens(docs(), [viagem({ motorista_doc: '', motorista: null })]);
+    expect(r.itens.find(i => i.rotulo === 'CPF')).toEqual({ rotulo: 'CPF', crm: '', documento: '529.982.247-25', status: 'sem_crm' });
+    expect(r.itens.find(i => i.rotulo === 'Nome')).toEqual({ rotulo: 'Nome', crm: '', documento: 'JOSE DA SILVA', status: 'sem_crm' });
+  });
+
   it('nenhuma viagem com o CPF ou as placas: lista vazia; CPF que bate vem antes de só placa', () => {
     expect(cruzarComViagens(docs({ cpf: '111.444.777-35', placas: ['QWE4R56'] }), [viagem()])).toEqual([]);
     const r = cruzarComViagens(docs(), [viagem({ id: 'placa', motorista_doc: '11144477735' }), viagem({ id: 'cpf', placa: 'JJJ1J11' })]);

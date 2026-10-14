@@ -26,7 +26,7 @@ export function cruzarComViagens(dados, viagens) {
     if (!mesmoCpf && !placasCrm.some(p => placas.includes(p))) continue;
 
     const comparar = (rotulo, crm, documento, iguais) => ({
-      rotulo, crm, documento, status: !documento ? 'sem_dado' : iguais ? 'ok' : 'diferente',
+      rotulo, crm, documento, status: !documento ? 'sem_dado' : !crm ? 'sem_crm' : iguais ? 'ok' : 'diferente',
     });
     const itens = [
       comparar('CPF', cpfCrm ? cpfFormatado(cpfCrm) : '', cpf ? cpfFormatado(cpf) : '', mesmoCpf),

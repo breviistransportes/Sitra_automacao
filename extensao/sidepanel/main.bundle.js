@@ -31379,7 +31379,7 @@ function cruzarComViagens(dados, viagens) {
       rotulo,
       crm,
       documento,
-      status: !documento ? "sem_dado" : iguais ? "ok" : "diferente"
+      status: !documento ? "sem_dado" : !crm ? "sem_crm" : iguais ? "ok" : "diferente"
     });
     const itens = [
       comparar("CPF", cpfCrm ? cpfFormatado(cpfCrm) : "", cpf ? cpfFormatado(cpf) : "", mesmoCpf),
@@ -31896,12 +31896,13 @@ async function sessaoDoCrm() {
     throw e;
   }
 }
-var SIMBOLO = { ok: "\u2705", diferente: "\u26A0\uFE0F", so_crm: "\u26A0\uFE0F", so_documento: "\u26A0\uFE0F", sem_dado: "\u2014" };
+var SIMBOLO = { ok: "\u2705", diferente: "\u26A0\uFE0F", so_crm: "\u26A0\uFE0F", so_documento: "\u26A0\uFE0F", sem_dado: "\u2014", sem_crm: "\u2014" };
 function textoDoItem(i) {
   if (i.status === "ok") return `${SIMBOLO.ok} ${i.rotulo}${i.rotulo.startsWith("Placa") ? "" : `: ${i.crm}`}`;
   if (i.status === "diferente") return `${SIMBOLO.diferente} ${i.rotulo}: CRM "${i.crm}" \xB7 documento "${i.documento}"`;
   if (i.status === "so_crm") return `${SIMBOLO.so_crm} ${i.rotulo}: est\xE1 na viagem, mas n\xE3o nos documentos`;
   if (i.status === "so_documento") return `${SIMBOLO.so_documento} ${i.rotulo}: est\xE1 nos documentos, mas n\xE3o na viagem`;
+  if (i.status === "sem_crm") return `${SIMBOLO.sem_crm} ${i.rotulo}: n\xE3o informado na viagem do CRM \xB7 documento "${i.documento}"`;
   return `${SIMBOLO.sem_dado} ${i.rotulo}: CRM "${i.crm}" \xB7 n\xE3o lido nos documentos`;
 }
 async function mostrarCruzamento() {
@@ -31952,7 +31953,7 @@ async function mostrarCruzamento() {
       const detalhe = [viagem.trajeto, viagem.veiculo].filter(Boolean).join(" \xB7 ");
       if (detalhe) b.append(el("small", detalhe));
       const ul = el("ul");
-      for (const i of itens) ul.append(el("li", textoDoItem(i), i.status === "ok" || i.status === "sem_dado" ? "" : "alerta"));
+      for (const i of itens) ul.append(el("li", textoDoItem(i), ["ok", "sem_dado", "sem_crm"].includes(i.status) ? "" : "alerta"));
       b.append(ul);
       return b;
     });

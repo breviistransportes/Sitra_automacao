@@ -403,12 +403,13 @@ async function sessaoDoCrm() {
   }
 }
 
-const SIMBOLO = { ok: '✅', diferente: '⚠️', so_crm: '⚠️', so_documento: '⚠️', sem_dado: '—' };
+const SIMBOLO = { ok: '✅', diferente: '⚠️', so_crm: '⚠️', so_documento: '⚠️', sem_dado: '—', sem_crm: '—' };
 function textoDoItem(i) {
   if (i.status === 'ok') return `${SIMBOLO.ok} ${i.rotulo}${i.rotulo.startsWith('Placa') ? '' : `: ${i.crm}`}`;
   if (i.status === 'diferente') return `${SIMBOLO.diferente} ${i.rotulo}: CRM "${i.crm}" · documento "${i.documento}"`;
   if (i.status === 'so_crm') return `${SIMBOLO.so_crm} ${i.rotulo}: está na viagem, mas não nos documentos`;
   if (i.status === 'so_documento') return `${SIMBOLO.so_documento} ${i.rotulo}: está nos documentos, mas não na viagem`;
+  if (i.status === 'sem_crm') return `${SIMBOLO.sem_crm} ${i.rotulo}: não informado na viagem do CRM · documento "${i.documento}"`;
   return `${SIMBOLO.sem_dado} ${i.rotulo}: CRM "${i.crm}" · não lido nos documentos`;
 }
 
@@ -444,7 +445,7 @@ async function mostrarCruzamento() {
       const detalhe = [viagem.trajeto, viagem.veiculo].filter(Boolean).join(' · ');
       if (detalhe) b.append(el('small', detalhe));
       const ul = el('ul');
-      for (const i of itens) ul.append(el('li', textoDoItem(i), i.status === 'ok' || i.status === 'sem_dado' ? '' : 'alerta'));
+      for (const i of itens) ul.append(el('li', textoDoItem(i), ['ok', 'sem_dado', 'sem_crm'].includes(i.status) ? '' : 'alerta'));
       b.append(ul);
       return b;
     });

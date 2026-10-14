@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Automação Sitra",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Lê documentos com IA e preenche cadastros e a Digitação manual de CT-e no Sitra Web Revolution.",
   "permissions": ["sidePanel", "storage", "scripting"],
   "host_permissions": ["https://2323.aleff.com.br/*", "https://generativelanguage.googleapis.com/*", "https://lpnuuwcidpaojzqhrojh.supabase.co/*"],
