@@ -26,7 +26,8 @@ const NO_TEXTO_DO_PDF = {
 };
 
 // Confere os campos do veículo com o texto exato do PDF: confirma, corrige 1–2 dígitos lidos errado, ou marca para conferir.
-export function conferirComTextoPdf(valores, textoPdf, avisos) {
+// prefixo: identifica o veículo nos avisos quando há mais de um (ex.: "Veículo 2 — ").
+export function conferirComTextoPdf(valores, textoPdf, avisos, prefixo = '') {
   const texto = String(textoPdf ?? '').toUpperCase();
   if ((texto.match(/\d/g) ?? []).length < 40) return valores; // PDF sem texto (imagem): nada a conferir
   const compacto = alfanum(texto);
@@ -47,10 +48,10 @@ export function conferirComTextoPdf(valores, textoPdf, avisos) {
     const unico = melhor && (candidatos.length === 1 || candidatos[1].d > melhor.d);
     if (melhor && melhor.d <= 2 && unico) {
       const novo = normalizarCampo(campo, melhor.c);
-      avisos.push(`${campo.rotulo}: corrigido pelo texto do PDF (${atual.valor} → ${novo})`);
+      avisos.push(`${prefixo}${campo.rotulo}: corrigido pelo texto do PDF (${atual.valor} → ${novo})`);
       v[chave] = { valor: novo, certeza: 'alta', fonte: 'texto exato do PDF' };
     } else {
-      avisos.push(`${campo.rotulo}: não confere com o texto do PDF — confira`);
+      avisos.push(`${prefixo}${campo.rotulo}: não confere com o texto do PDF — confira`);
       v[chave] = { ...atual, certeza: 'conferir' };
     }
   }

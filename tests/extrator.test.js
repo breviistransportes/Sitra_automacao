@@ -27,7 +27,7 @@ const respostaGemini = (obj, finishReason = 'STOP') => ({
 describe('schema e partes', () => {
   it('schema exige todos os campos da IA, sem propriedade', () => {
     const s = montarSchema();
-    expect(s.properties.campos.required).toEqual(CAMPOS_IA.map(c => c.chave));
+    expect([...s.properties.campos.required, ...s.properties.veiculos.items.required].sort()).toEqual(CAMPOS_IA.map(c => c.chave).sort());
     expect(s.properties.campos.required).not.toContain('propriedade');
     expect(s.properties.campos.properties.cpf.properties.certeza.enum).toEqual(['alta', 'conferir']);
     expect(s.additionalProperties).toBe(false);
@@ -52,12 +52,16 @@ describe('v2: proprietário e veículo', () => {
     const req = s.properties.campos.required;
     expect(req).toContain('prop_cpf_cnpj');
     expect(req).toContain('prop_rntrc');
-    expect(req).toContain('veic_chassi');
+    expect(req).not.toContain('veic_chassi');
     expect(req).not.toContain('prop_ie');
     expect(req).not.toContain('prop_banco');
-    expect(req).not.toContain('veic_venc_ipva');
-    expect(s.properties.campos.properties.veic_tipo.properties.valor.enum).toContain('Cavalo');
-    expect(s.properties.campos.properties.veic_tipo.properties.valor.enum).toContain('');
+    // Veículos: uma lista, um item por CRV/CRLV (cavalo e carreta são dois cadastros).
+    const veic = s.properties.veiculos.items;
+    expect(s.required).toContain('veiculos');
+    expect(veic.required).toContain('veic_chassi');
+    expect(veic.required).not.toContain('veic_venc_ipva');
+    expect(veic.properties.veic_tipo.properties.valor.enum).toContain('Cavalo');
+    expect(veic.properties.veic_tipo.properties.valor.enum).toContain('');
   });
 
   it('proprietário vem do cartão ANTT; CRV/CRLV só se não houver ANTT', () => {
@@ -78,17 +82,20 @@ describe('v2: proprietário e veículo', () => {
       campos: {
         cpf: { valor: '52998224725', certeza: 'alta', fonte: 'CNH' },
         prop_cpf_cnpj: { valor: '11222333000181', certeza: 'alta', fonte: 'CRV.pdf' },
+      },
+      veiculos: [{
         veic_tipo: { valor: 'Cavalo', certeza: 'conferir', fonte: 'CRV.pdf' },
         veic_placa: { valor: 'xyz9a87', certeza: 'alta', fonte: 'CRV.pdf' },
-      },
+      }],
       documentos_encontrados: [], avisos: [],
     }, padroes, { hoje: new Date(2026, 8, 24) });
     expect(r.valores.prop_cpf_cnpj.valor).toBe('11.222.333/0001-81');
-    expect(r.valores.veic_tipo).toEqual({ valor: '8', certeza: 'conferir', fonte: 'CRV.pdf' });
+    expect(r.veiculos[0].veic_tipo).toEqual({ valor: '8', certeza: 'conferir', fonte: 'CRV.pdf' });
     expect(r.valores.prop_ie.valor).toBe('ISENTO');
     expect(r.valores.prop_propriedade.valor).toBe('3');
-    expect(r.valores.veic_tipo_propriedade.valor).toBe('3');
-    expect(r.valores.veic_venc_ipva.valor).toBe('25/09/2026');
+    expect(r.veiculos[0].veic_tipo_propriedade.valor).toBe('3');
+    expect(r.veiculos[0].veic_venc_ipva.valor).toBe('25/09/2026');
+    expect(r.valores.veic_placa).toBeUndefined();
     expect(r.valores.placa.valor).toBe('XYZ-9A87');
   });
 
@@ -270,7 +277,7 @@ describe('posProcessar', () => {
     expect(r.valores.estado_civil).toEqual({ valor: 'CASADO', certeza: 'alta', fonte: 'regra' });
     expect(r.documentos).toEqual(['CNH-e']);
     expect(r.avisos).toContain('comprovante em nome de terceiro');
-    expect(Object.keys(r.valores).sort()).toEqual(CAMPOS.map(c => c.chave).sort());
+    expect([...Object.keys(r.valores), ...Object.keys(r.veiculos[0])].sort()).toEqual(CAMPOS.map(c => c.chave).sort());
   });
 
   it('valor ilegível vira "conferir" com aviso; CPF inválido também', () => {
@@ -284,5 +291,54 @@ describe('posProcessar', () => {
   it('aguenta resposta vazia', () => {
     const r = posProcessar(null, padroes);
     expect(r.valores.cpf).toEqual({ valor: '', certeza: 'conferir', fonte: '' });
+  });
+});
+
+describe('vários veículos (cavalo + carreta)', () => {
+  const padroes = { propriedade: '3', nacionalidade: 'BRASILEIRA' };
+  const c = (valor, fonte = 'CRLV.pdf') => ({ valor, certeza: 'alta', fonte });
+  const pp = (veiculos, campos = {}) => posProcessar({ campos, veiculos, documentos_encontrados: [], avisos: [] }, padroes, { hoje: new Date(2026, 8, 24) });
+
+  it('um veículo por CRLV, cavalo primeiro; cada um com o CPF/CNPJ do proprietário', () => {
+    const r = pp([
+      { veic_placa: c('XYZ9K87', 'carreta.pdf'), veic_tipo: c('Carreta', 'carreta.pdf') },
+      { veic_placa: c('ABC1D23', 'cavalo.pdf'), veic_tipo: c('Cavalo', 'cavalo.pdf') },
+    ], { prop_cpf_cnpj: c('11222333000181', 'ANTT.pdf') });
+    expect(r.veiculos.map(v => v.veic_placa.valor)).toEqual(['ABC-1D23', 'XYZ-9K87']);
+    expect(r.veiculos.map(v => v.veic_cpf_cnpj_prop.valor)).toEqual(['11.222.333/0001-81', '11.222.333/0001-81']);
+    expect(r.veiculos.map(v => v.veic_tipo_propriedade.valor)).toEqual(['3', '3']);
+    expect(r.veiculos[1].veic_venc_ipva.valor).toBe('25/09/2026');
+    // A tela de Motorista tem uma placa só: a do cavalo.
+    expect(r.valores.placa.valor).toBe('ABC-1D23');
+  });
+
+  it('mesma placa em dois arquivos (frente e verso) vira um veículo só, completando o que faltou', () => {
+    const r = pp([
+      { veic_placa: c('ABC1D23'), veic_renavam: c('') },
+      { veic_placa: c('abc-1d23', 'verso.jpg'), veic_renavam: c('01234567890', 'verso.jpg') },
+    ]);
+    expect(r.veiculos).toHaveLength(1);
+    expect(r.veiculos[0].veic_renavam).toEqual({ valor: '01234567890', certeza: 'alta', fonte: 'verso.jpg' });
+  });
+
+  it('sem CRLV: um veículo vazio, com os padrões, como antes', () => {
+    const r = pp([]);
+    expect(r.veiculos).toHaveLength(1);
+    expect(r.veiculos[0].veic_placa.valor).toBe('');
+    expect(r.veiculos[0].veic_tipo_propriedade.valor).toBe('3');
+    expect(pp(undefined).veiculos).toHaveLength(1);
+  });
+
+  it('avisos dizem de qual veículo é o problema', () => {
+    const r = pp([
+      { veic_placa: c('ABC1D23'), veic_tipo: c('Cavalo') },
+      { veic_placa: c('XYZ9K87'), veic_tipo: c('Carreta'), veic_ano_fab: c('19') },
+    ]);
+    expect(r.avisos).toContain('Veículo 2 — Ano Fab.: valor lido "19" não está num formato válido');
+  });
+
+  it('instruções pedem um item de veiculos por CRLV', () => {
+    expect(INSTRUCOES).toMatch(/veiculos/);
+    expect(INSTRUCOES).toMatch(/cavalo.*carreta/i);
   });
 });

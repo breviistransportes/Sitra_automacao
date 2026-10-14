@@ -2936,7 +2936,7 @@ var NO_TEXTO_DO_PDF = {
   veic_chassi: /(?<![A-Z0-9])[A-Z0-9]{17}(?![A-Z0-9])/g,
   veic_certificado: /(?<!\d)\d{9,15}(?!\d)/g
 };
-function conferirComTextoPdf(valores, textoPdf, avisos) {
+function conferirComTextoPdf(valores, textoPdf, avisos, prefixo = "") {
   const texto = String(textoPdf ?? "").toUpperCase();
   if ((texto.match(/\d/g) ?? []).length < 40) return valores;
   const compacto = alfanum(texto);
@@ -2955,10 +2955,10 @@ function conferirComTextoPdf(valores, textoPdf, avisos) {
     const unico = melhor && (candidatos.length === 1 || candidatos[1].d > melhor.d);
     if (melhor && melhor.d <= 2 && unico) {
       const novo = normalizarCampo(campo2, melhor.c);
-      avisos.push(`${campo2.rotulo}: corrigido pelo texto do PDF (${atual.valor} \u2192 ${novo})`);
+      avisos.push(`${prefixo}${campo2.rotulo}: corrigido pelo texto do PDF (${atual.valor} \u2192 ${novo})`);
       v[chave] = { valor: novo, certeza: "alta", fonte: "texto exato do PDF" };
     } else {
-      avisos.push(`${campo2.rotulo}: n\xE3o confere com o texto do PDF \u2014 confira`);
+      avisos.push(`${prefixo}${campo2.rotulo}: n\xE3o confere com o texto do PDF \u2014 confira`);
       v[chave] = { ...atual, certeza: "conferir" };
     }
   }
@@ -3013,6 +3013,8 @@ function desempatar(valores, segunda, terceira, avisos) {
 // src/lib/extrator.js
 var MODELO = "gemini-3.8-flash";
 var CAMPOS_IA = CAMPOS.filter((c) => c.ia);
+var CAMPOS_GERAIS = CAMPOS.filter((c) => c.tela !== "veiculo");
+var CAMPOS_VEICULO = CAMPOS.filter((c) => c.tela === "veiculo");
 var ErroExtracao = class extends Error {
 };
 var INSTRUCOES = `Voc\xEA extrai dados de documentos de motoristas brasileiros para o cadastro no sistema Sitra.
@@ -3044,7 +3046,10 @@ Propriet\xE1rio (campos prop_*):
 - S\xF3 use o PROPRIET\xC1RIO do CRV/CRLV (nome e CPF/CNPJ) se n\xE3o houver cart\xE3o da ANTT.
 - prop_rg / prop_org_exp: s\xF3 se houver documento de identidade do propriet\xE1rio.
 
-Ve\xEDculo (campos veic_*), do CRV/CRLV:
+Ve\xEDculos (lista veiculos, campos veic_*), do CRV/CRLV:
+- Um item em veiculos para CADA ve\xEDculo, ou seja, cada CRV/CRLV de placa diferente: cavalo e carreta (ou cavalo e duas carretas, no bitrem) s\xE3o ve\xEDculos separados, cada um com seus pr\xF3prios dados. Nunca misture dados de dois CRLVs no mesmo item.
+- O mesmo ve\xEDculo em mais de um arquivo (frente e verso, foto e PDF) \xE9 um item s\xF3.
+- Sem nenhum CRV/CRLV, veiculos fica [].
 - veic_placa, veic_renavam (C\xD3DIGO RENAVAM), veic_chassi, veic_cor, veic_ano_fab, veic_ano_modelo.
 - MARCA/MODELO/VERS\xC3O: veic_marca = parte antes da "/", veic_modelo = o restante.
 - veic_certificado = n\xFAmero do CRV/CRLV (n\xFAmero do documento, n\xE3o o RENAVAM).
@@ -3074,19 +3079,25 @@ function montarSchema() {
     required: ["valor", "certeza", "fonte"],
     additionalProperties: false
   };
+  const objeto = (campos) => {
+    const daIa = campos.filter((c) => c.ia);
+    return {
+      type: "object",
+      properties: Object.fromEntries(daIa.map((c) => [c.chave, c.opcoes ? { ...campo2, properties: { ...campo2.properties, valor: { type: "string", enum: [...c.opcoes.map((o) => o[1]), ""] } }, description: c.dica } : { ...campo2, description: c.dica }])),
+      required: daIa.map((c) => c.chave),
+      additionalProperties: false
+    };
+  };
   return {
     type: "object",
     properties: {
-      campos: {
-        type: "object",
-        properties: Object.fromEntries(CAMPOS_IA.map((c) => [c.chave, c.opcoes ? { ...campo2, properties: { ...campo2.properties, valor: { type: "string", enum: [...c.opcoes.map((o) => o[1]), ""] } }, description: c.dica } : { ...campo2, description: c.dica }])),
-        required: CAMPOS_IA.map((c) => c.chave),
-        additionalProperties: false
-      },
+      campos: objeto(CAMPOS_GERAIS),
+      // Um item por CRV/CRLV: cavalo e carreta são dois cadastros de veículo no Sitra.
+      veiculos: { type: "array", items: objeto(CAMPOS_VEICULO) },
       documentos_encontrados: { type: "array", items: { type: "string" } },
       avisos: { type: "array", items: { type: "string" } }
     },
-    required: ["campos", "documentos_encontrados", "avisos"],
+    required: ["campos", "veiculos", "documentos_encontrados", "avisos"],
     additionalProperties: false
   };
 }
@@ -3176,26 +3187,28 @@ function contatoNoTexto(campo2, valor, texto) {
   return somenteDigitos(texto).includes(somenteDigitos(valor));
 }
 function posProcessar(bruto, padroes, { hoje = /* @__PURE__ */ new Date(), textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura } = {}) {
-  const valores = {};
   const avisos = [...bruto?.avisos ?? []];
-  for (const campo2 of CAMPOS) {
-    const b = bruto?.campos?.[campo2.chave];
+  const lerCampos = (campos, origem, prefixo) => {
+    const lidos = {};
+    for (const campo2 of campos) lerCampo(campo2, origem?.[campo2.chave], prefixo(campo2), lidos);
+    return lidos;
+  };
+  const lerCampo = (campo2, b, nome, valores2) => {
     let valor = normalizarCampo(campo2, b?.valor ?? "");
     let certeza = b?.certeza === "alta" ? "alta" : "conferir";
     let fonte = nomeSeguro(b?.fonte ?? "");
-    const nome = campo2.tela === "motorista" ? campo2.rotulo : `${TELAS[campo2.tela].rotulo} \u2014 ${campo2.rotulo}`;
     const descartar = (motivo) => {
       avisos.push(`${nome}: ignorado "${String(b.valor).slice(0, 60)}" ${motivo}`);
-      valores[campo2.chave] = { valor: "", certeza: "conferir", fonte: "" };
+      valores2[campo2.chave] = { valor: "", certeza: "conferir", fonte: "" };
     };
     if (CONTATOS.includes(campo2.chave) && b?.valor) {
       if (DE_DOCUMENTO.test((b.fonte ?? "").trim())) {
         descartar(`de ${fonte} \u2014 telefone e e-mail s\xF3 valem das mensagens`);
-        continue;
+        return;
       }
       if (textoConfiavel !== void 0 && valor && !contatoNoTexto(campo2, valor, textoConfiavel)) {
         descartar("\u2014 n\xE3o aparece nas mensagens");
-        continue;
+        return;
       }
     }
     if (b?.valor && TEM_CARACTERE_SUSPEITO.test(b.valor)) {
@@ -3211,8 +3224,12 @@ function posProcessar(bruto, padroes, { hoje = /* @__PURE__ */ new Date(), texto
       fonte = "padr\xE3o";
     }
     if (!valor) certeza = "conferir";
-    valores[campo2.chave] = { valor, certeza, fonte };
-  }
+    valores2[campo2.chave] = { valor, certeza, fonte };
+  };
+  const valores = lerCampos(CAMPOS_GERAIS, bruto?.campos, (c) => c.tela === "motorista" ? c.rotulo : `${TELAS[c.tela].rotulo} \u2014 ${c.rotulo}`);
+  const brutos = veiculosBrutos(bruto?.veiculos);
+  const rotuloVeiculo2 = (i) => brutos.length > 1 ? `Ve\xEDculo ${i + 1}` : "Ve\xEDculo";
+  const veiculos = brutos.map((b, i) => lerCampos(CAMPOS_VEICULO, b, (c) => `${rotuloVeiculo2(i)} \u2014 ${c.rotulo}`));
   if (!valores.fone_residencial.valor && valores.celular.valor) {
     valores.fone_residencial = { ...valores.celular, fonte: "igual ao celular" };
   }
@@ -3234,8 +3251,31 @@ function posProcessar(bruto, padroes, { hoje = /* @__PURE__ */ new Date(), texto
   const segundaSemDivergentes = segundaLeitura && Object.fromEntries(Object.entries(segundaLeitura).filter(([k]) => !divergentes.includes(k)));
   let conferidos = compararLeituras(valores, segundaSemDivergentes, avisos);
   if (terceiraLeitura) conferidos = desempatar(conferidos, segundaLeitura, terceiraLeitura, avisos);
-  conferidos = conferirComTextoPdf(conferidos, textoPdf, avisos);
-  return { valores: aplicarRegras(conferidos, { hoje, padroes }), avisos, documentos: bruto?.documentos_encontrados ?? [] };
+  const veiculosConferidos = veiculos.map((v, i) => conferirComTextoPdf(v, textoPdf, avisos, brutos.length > 1 ? `${rotuloVeiculo2(i)} \u2014 ` : ""));
+  const comRegras = veiculosConferidos.map((v) => aplicarRegras({ ...conferidos, ...v }, { hoje, padroes }));
+  const geral = Object.fromEntries(Object.entries(comRegras[0]).filter(([k]) => !k.startsWith("veic_")));
+  return {
+    valores: geral,
+    veiculos: comRegras.map((v) => valoresDaTela(v, "veiculo")),
+    avisos,
+    documentos: bruto?.documentos_encontrados ?? []
+  };
+}
+var placaDe = (b) => String(b?.veic_placa?.valor ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+var ehCarreta = (b) => /carreta|reboque/i.test(String(b?.veic_tipo?.valor ?? ""));
+function veiculosBrutos(lista2) {
+  const juntos = [];
+  for (const b of Array.isArray(lista2) ? lista2 : []) {
+    if (!b || !Object.values(b).some((c) => String(c?.valor ?? "").trim())) continue;
+    const igual = placaDe(b) && juntos.find((j) => placaDe(j) === placaDe(b));
+    if (!igual) {
+      juntos.push({ ...b });
+      continue;
+    }
+    for (const [chave, c] of Object.entries(b)) if (!String(igual[chave]?.valor ?? "").trim()) igual[chave] = c;
+  }
+  const ordenados = [...juntos.filter((b) => !ehCarreta(b)), ...juntos.filter(ehCarreta)];
+  return ordenados.length ? ordenados : [{}];
 }
 
 // src/lib/campos-cte.js
@@ -31178,8 +31218,10 @@ async function salvarConfig(cfg, storage = chrome.storage.local) {
 var PROPRIEDADES = [["1", "Da Casa"], ["2", "Agregado"], ["3", "Terceiro"]];
 var ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 var esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
-function controle(campo2, valor) {
-  const nome = `c_${campo2.chave}`;
+var indiceVeiculo = (aba) => String(aba ?? "").startsWith("veiculo:") ? Number(aba.slice(8)) : 0;
+var telaDaAba = (aba) => String(aba).split(":")[0];
+var nomeDoCampo = (campo2, i) => campo2.tela === "veiculo" ? `c_${campo2.chave}__${i}` : `c_${campo2.chave}`;
+function controle(campo2, valor, nome) {
   const opcoes = (lista2) => lista2.map(([v, t]) => `<option value="${esc(v)}"${v === valor ? " selected" : ""}>${esc(t)}</option>`).join("");
   const select = (lista2) => `<select name="${nome}"><option value="">\u2014</option>${opcoes(lista2)}</select>`;
   if (campo2.tipo === "uf") return select(UFS.map((u) => [u, u]));
@@ -31187,28 +31229,56 @@ function controle(campo2, valor) {
   if (campo2.tipo === "opcao") return select(campo2.opcoes);
   return `<input name="${nome}" value="${esc(valor)}" autocomplete="off">`;
 }
-function painel(tela, valores) {
+function painel(tela, valores, i = 0) {
   const campos = camposDaTela(tela);
   const grupos = [...new Set(campos.map((c) => c.grupo))];
   return grupos.map((g) => `<fieldset><legend>${esc(g)}</legend>${campos.filter((c) => c.grupo === g).map((c) => {
     const v = valores[c.chave] ?? { valor: "", certeza: "conferir", fonte: "" };
-    return `<label class="campo${v.certeza === "conferir" ? " conferir" : ""}"><span>${esc(c.rotulo)}${c.obrigatorio ? " *" : ""}</span>${controle(c, v.valor)}${v.fonte ? `<small>${esc(v.fonte)}</small>` : ""}</label>`;
+    return `<label class="campo${v.certeza === "conferir" ? " conferir" : ""}"><span>${esc(c.rotulo)}${c.obrigatorio ? " *" : ""}</span>${controle(c, v.valor, nomeDoCampo(c, i))}${v.fonte ? `<small>${esc(v.fonte)}</small>` : ""}</label>`;
   }).join("")}</fieldset>`).join("");
 }
-function montarFormulario(valores) {
-  const telas = Object.keys(TELAS);
-  const abas = telas.map((t, i) => `<button type="button" class="aba${i === 0 ? " ativa" : ""}" data-tela="${t}">${esc(TELAS[t].rotulo)}</button>`).join("");
-  const paineis = telas.map((t, i) => `<div data-painel="${t}"${i === 0 ? "" : " hidden"}>${painel(t, valores)}</div>`).join("");
-  return `<div class="abas">${abas}</div>${paineis}`;
+function rotuloVeiculo(v, i, total) {
+  if (total === 1) return TELAS.veiculo.rotulo;
+  const tipo = CAMPO_POR_CHAVE.veic_tipo.opcoes.find(([valor]) => valor === v.veic_tipo?.valor)?.[1] ?? "";
+  return [`Ve\xEDculo ${i + 1} \xB7`, tipo, v.veic_placa?.valor].filter(Boolean).join(" ");
 }
-function mostrarAba(form, tela) {
-  for (const b of form.querySelectorAll(".aba")) b.classList.toggle("ativa", b.dataset.tela === tela);
-  for (const p of form.querySelectorAll("[data-painel]")) p.hidden = p.dataset.painel !== tela;
+function montarFormulario(valores, veiculos = [valores]) {
+  const lista2 = veiculos.length ? veiculos : [{}];
+  const abas = [
+    ...Object.keys(TELAS).filter((t) => t !== "veiculo").map((t) => ({ aba: t, rotulo: TELAS[t].rotulo, html: painel(t, valores) })),
+    ...lista2.map((v, i) => ({ aba: `veiculo:${i}`, rotulo: rotuloVeiculo(v, i, lista2.length), html: painel("veiculo", v, i) }))
+  ];
+  const botoes = abas.map((a, i) => `<button type="button" class="aba${i === 0 ? " ativa" : ""}" data-tela="${a.aba}">${esc(a.rotulo)}</button>`).join("");
+  const paineis = abas.map((a, i) => `<div data-painel="${a.aba}"${i === 0 ? "" : " hidden"}>${a.html}</div>`).join("");
+  return `<div class="abas">${botoes}</div>${paineis}`;
 }
-function lerFormulario(form, tela) {
+function mostrarAba(form, aba) {
+  for (const b of form.querySelectorAll(".aba")) b.classList.toggle("ativa", b.dataset.tela === aba);
+  for (const p of form.querySelectorAll("[data-painel]")) p.hidden = p.dataset.painel !== aba;
+}
+var abaAtiva = (form) => form.querySelector(".aba.ativa")?.dataset.tela ?? null;
+var quantidadeVeiculos = (form) => form.querySelectorAll('[data-painel^="veiculo:"]').length;
+var rotuloDaAba = (form, aba) => form.querySelector(`.aba[data-tela="${aba}"]`)?.textContent ?? "";
+function dadosDoFormulario(form) {
+  const ler2 = (c, i) => {
+    const e = form.elements[nomeDoCampo(c, i)];
+    const label = e?.closest("label");
+    return {
+      valor: e?.value ?? "",
+      certeza: label?.classList.contains("conferir") ? "conferir" : "alta",
+      fonte: label?.querySelector("small")?.textContent ?? ""
+    };
+  };
+  const valores = Object.fromEntries(CAMPOS.filter((c) => c.tela !== "veiculo").map((c) => [c.chave, ler2(c, 0)]));
+  const veiculos = Array.from({ length: quantidadeVeiculos(form) }, (_, i) => Object.fromEntries(camposDaTela("veiculo").map((c) => [c.chave, ler2(c, i)])));
+  return { valores, veiculos };
+}
+function lerFormulario(form, aba) {
+  const i = indiceVeiculo(aba);
+  const tela = aba ? telaDaAba(aba) : null;
   const valores = {}, invalidos = [], faltando = [];
   for (const c of CAMPOS) {
-    const bruto = form.elements[`c_${c.chave}`]?.value ?? "";
+    const bruto = form.elements[nomeDoCampo(c, i)]?.value ?? "";
     const v = normalizarCampo(c, bruto);
     valores[c.chave] = v;
     if (tela && c.tela !== tela) continue;
@@ -31216,6 +31286,165 @@ function lerFormulario(form, tela) {
     else if (!v && c.obrigatorio) faltando.push(c.rotulo);
   }
   return { valores, invalidos, faltando };
+}
+
+// src/lib/crm.js
+var CRM = {
+  url: "https://lpnuuwcidpaojzqhrojh.supabase.co",
+  chave: "sb_publishable_4Xv5flgPrCnGcYbS2-XRbw_zCgpAxeb"
+};
+var COLUNAS_VIAGEM = "id,cliente_nome,origem,destino,data_viagem,data_coleta,motorista,motorista_doc,placa,veiculo_tipo,carroceria";
+var CHAVE_SESSAO = "crm";
+var MARGEM_RENOVACAO_MS = 5 * 6e4;
+var ErroCrm = class extends Error {
+  constructor(mensagem2, { sair: sair2 = false } = {}) {
+    super(mensagem2);
+    this.sair = sair2;
+  }
+};
+async function chamar(caminho, init, fetchFn) {
+  try {
+    return await fetchFn(`${CRM.url}${caminho}`, init);
+  } catch {
+    throw new ErroCrm("Sem conex\xE3o com o CRM.");
+  }
+}
+var cabecalhos = (token) => ({ apikey: CRM.chave, "Content-Type": "application/json", ...token ? { Authorization: `Bearer ${token}` } : {} });
+function sessaoDe(corpo, agora) {
+  return { access_token: corpo.access_token, refresh_token: corpo.refresh_token, expira_em: agora + corpo.expires_in * 1e3, email: corpo.user?.email ?? "" };
+}
+async function entrar(email, senha, { fetchFn = fetch, agora = Date.now() } = {}) {
+  const r = await chamar("/auth/v1/token?grant_type=password", {
+    method: "POST",
+    headers: cabecalhos(),
+    body: JSON.stringify({ email: String(email).trim().toLowerCase(), password: senha })
+  }, fetchFn);
+  const corpo = await r.json().catch(() => ({}));
+  if (r.status === 400 && corpo.error === "invalid_grant") throw new ErroCrm("E-mail ou senha do CRM incorretos.");
+  if (!r.ok) throw new ErroCrm(`O CRM recusou o login (${r.status}): ${corpo.error_description ?? corpo.msg ?? corpo.message ?? "sem detalhes"}`);
+  return sessaoDe(corpo, agora);
+}
+async function renovarSeVencendo(sessao, { fetchFn = fetch, agora = Date.now() } = {}) {
+  if (sessao.expira_em - MARGEM_RENOVACAO_MS > agora) return sessao;
+  const r = await chamar("/auth/v1/token?grant_type=refresh_token", {
+    method: "POST",
+    headers: cabecalhos(),
+    body: JSON.stringify({ refresh_token: sessao.refresh_token })
+  }, fetchFn);
+  const corpo = await r.json().catch(() => ({}));
+  if (!r.ok) throw new ErroCrm("A sess\xE3o do CRM expirou. Entre de novo nas Configura\xE7\xF5es.", { sair: r.status === 400 || r.status === 401 });
+  return sessaoDe(corpo, agora);
+}
+async function viagensProgramadas(sessao, { fetchFn = fetch } = {}) {
+  const params = new URLSearchParams({ select: COLUNAS_VIAGEM, fase: "eq.programado" });
+  const r = await chamar(`/rest/v1/trips?${params}`, { method: "GET", headers: cabecalhos(sessao.access_token) }, fetchFn);
+  if (r.status === 401) throw new ErroCrm("A sess\xE3o do CRM expirou. Entre de novo nas Configura\xE7\xF5es.", { sair: true });
+  if (!r.ok) throw new ErroCrm(`O CRM n\xE3o respondeu as viagens (${r.status}).`);
+  const lista2 = await r.json().catch(() => null);
+  if (!Array.isArray(lista2)) throw new ErroCrm("O CRM respondeu num formato inesperado.");
+  return lista2;
+}
+async function sair(sessao, { fetchFn = fetch } = {}) {
+  await chamar("/auth/v1/logout", { method: "POST", headers: cabecalhos(sessao.access_token) }, fetchFn).catch(() => {
+  });
+}
+async function lerSessao(storage = chrome.storage.local) {
+  const { [CHAVE_SESSAO]: s } = await storage.get(CHAVE_SESSAO);
+  return s?.access_token && s?.refresh_token ? s : null;
+}
+async function salvarSessao(sessao, storage = chrome.storage.local) {
+  if (sessao) await storage.set({ [CHAVE_SESSAO]: sessao });
+  else await storage.remove(CHAVE_SESSAO);
+}
+
+// src/lib/cruzamento.js
+var alfanum2 = (s) => String(s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+var nomeComparavel = (s) => String(s ?? "").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Z]+/g, " ").trim();
+var cpfFormatado = (s) => normalizarCampo(CAMPO_POR_CHAVE.cpf, s ?? "") || String(s ?? "");
+var placaFormatada = (p) => normalizarCampo(CAMPO_POR_CHAVE.veic_placa, p) || p;
+var dataBr = (iso) => /^\d{4}-\d{2}-\d{2}/.test(iso ?? "") ? iso.slice(0, 10).split("-").reverse().join("/") : "";
+function placasDe(texto) {
+  return alfanum2(texto).match(/[A-Z]{3}\d[A-Z0-9]\d{2}/g) ?? [];
+}
+function cruzarComViagens(dados, viagens) {
+  const cpf = somenteDigitos(dados.cpf);
+  const placas = [...new Set((dados.placas ?? []).map(alfanum2).filter(Boolean))];
+  const resultado = [];
+  for (const v of Array.isArray(viagens) ? viagens : []) {
+    const cpfCrm = somenteDigitos(v.motorista_doc);
+    const placasCrm = placasDe(v.placa);
+    const mesmoCpf = !!cpf && cpf === cpfCrm;
+    if (!mesmoCpf && !placasCrm.some((p) => placas.includes(p))) continue;
+    const comparar = (rotulo, crm, documento, iguais) => ({
+      rotulo,
+      crm,
+      documento,
+      status: !documento ? "sem_dado" : !crm ? "sem_crm" : iguais ? "ok" : "diferente"
+    });
+    const itens = [
+      comparar("CPF", cpfCrm ? cpfFormatado(cpfCrm) : "", cpf ? cpfFormatado(cpf) : "", mesmoCpf),
+      comparar("Nome", String(v.motorista ?? ""), String(dados.nome ?? ""), nomeComparavel(v.motorista) === nomeComparavel(dados.nome)),
+      ...placasCrm.map((p) => {
+        const tem = placas.includes(p);
+        return { rotulo: `Placa ${placaFormatada(p)}`, crm: placaFormatada(p), documento: tem ? placaFormatada(p) : "", status: tem ? "ok" : "so_crm" };
+      }),
+      ...placas.filter((p) => !placasCrm.includes(p)).map((p) => ({ rotulo: `Placa ${placaFormatada(p)}`, crm: "", documento: placaFormatada(p), status: "so_documento" }))
+    ];
+    resultado.push({
+      mesmoCpf,
+      viagem: {
+        id: v.id,
+        cliente: String(v.cliente_nome ?? ""),
+        trajeto: [v.origem, v.destino].filter(Boolean).join(" \u2192 "),
+        data: dataBr(v.data_coleta) || dataBr(v.data_viagem),
+        veiculo: [v.veiculo_tipo, v.carroceria].filter(Boolean).join(" \xB7 ")
+      },
+      itens
+    });
+  }
+  return resultado.sort((a, b) => Number(b.mesmoCpf) - Number(a.mesmoCpf)).map(({ mesmoCpf, ...r }) => r);
+}
+
+// src/lib/historico.js
+var DIAS_NO_HISTORICO = 30;
+var MAXIMO_NO_HISTORICO = 200;
+var CHAVE = "historico";
+var DIA = 24 * 60 * 60 * 1e3;
+function validos(lista2, agora) {
+  return (Array.isArray(lista2) ? lista2 : []).filter((r) => r && typeof r.id === "string" && agora - r.atualizadoEm <= DIAS_NO_HISTORICO * DIA).sort((a, b) => b.atualizadoEm - a.atualizadoEm).slice(0, MAXIMO_NO_HISTORICO);
+}
+async function ler(storage, agora) {
+  const { [CHAVE]: bruto } = await storage.get(CHAVE);
+  const lista2 = validos(bruto, agora);
+  if (!Array.isArray(bruto) || lista2.length !== bruto.length) await storage.set({ [CHAVE]: lista2 });
+  return lista2;
+}
+async function lerHistorico({ storage = chrome.storage.local, agora = Date.now() } = {}) {
+  return ler(storage, agora);
+}
+async function salvarNoHistorico({ id, valores, veiculos, avisos }, { storage = chrome.storage.local, agora = Date.now(), novoId = () => crypto.randomUUID() } = {}) {
+  const lista2 = await ler(storage, agora);
+  const atual = id && lista2.find((r) => r.id === id);
+  const registro = atual ? { ...atual, valores, veiculos, ...avisos ? { avisos } : {}, atualizadoEm: agora } : { id: id ?? novoId(), criadoEm: agora, atualizadoEm: agora, valores, veiculos, avisos: avisos ?? [] };
+  await storage.set({ [CHAVE]: validos([registro, ...lista2.filter((r) => r.id !== registro.id)], agora) });
+  return registro;
+}
+async function excluirDoHistorico(id, { storage = chrome.storage.local, agora = Date.now() } = {}) {
+  const lista2 = await ler(storage, agora);
+  await storage.set({ [CHAVE]: lista2.filter((r) => r.id !== id) });
+}
+async function apagarHistorico({ storage = chrome.storage.local } = {}) {
+  await storage.remove(CHAVE);
+}
+var doisDigitos = (n) => String(n).padStart(2, "0");
+function resumoDoRegistro(r) {
+  const d = new Date(r.atualizadoEm);
+  return {
+    nome: r.valores?.nome?.valor || "(sem nome)",
+    cpf: r.valores?.cpf?.valor ?? "",
+    placas: (r.veiculos ?? []).map((v) => v?.veic_placa?.valor).filter(Boolean),
+    quando: `${doisDigitos(d.getDate())}/${doisDigitos(d.getMonth() + 1)}/${d.getFullYear()} ${doisDigitos(d.getHours())}:${doisDigitos(d.getMinutes())}`
+  };
 }
 
 // src/sidepanel/formulario-cte.js
@@ -31273,6 +31502,7 @@ var $ = (id) => document.getElementById(id);
 var arquivos = [];
 var confirmarSobrescrita = false;
 var modo = "cadastro";
+var registroAtual = null;
 function mostrar(etapa) {
   for (const s of document.querySelectorAll("section[data-etapa]")) s.hidden = s.dataset.etapa !== etapa;
 }
@@ -31354,9 +31584,13 @@ async function lerDocumentos() {
     const segundaLeitura = segunda.erro ? null : segunda;
     const terceiraLeitura = camposDivergentes(bruto?.campos, segundaLeitura).length ? await chamarGeminiConferencia(cfg.apiKey, docs).catch(() => null) : null;
     const r = posProcessar(bruto, cfg.padroes, { textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura });
-    $("form-conferencia").innerHTML = montarFormulario(r.valores);
+    $("form-conferencia").innerHTML = montarFormulario(r.valores, r.veiculos);
     const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(", ")}`] : [];
-    preencherLista($("avisos"), [...docsLidos, ...avisosEntrada, ...r.avisos]);
+    const avisos = [...docsLidos, ...avisosEntrada, ...r.avisos];
+    preencherLista($("avisos"), avisos);
+    registroAtual = null;
+    await guardarNoHistorico({ valores: r.valores, veiculos: r.veiculos, avisos });
+    mostrarCruzamento();
     confirmarSobrescrita = false;
     mostrar("conferencia");
   } catch (e) {
@@ -31373,9 +31607,9 @@ async function executarNoSitra(func, args = []) {
   return r.result;
 }
 var STATUS = { ok: "\u2705", sitra: "\u{1F535} veio do Sitra (CEP) \u2014", falhou: "\u26A0\uFE0F n\xE3o gravou \u2014", vazio: "\u26A0\uFE0F obrigat\xF3rio vazio \u2014" };
-function mostrarRelatorio(rel) {
+function mostrarRelatorio(rel, rotuloTela = TELAS[rel.tela]?.rotulo) {
   const sucessoCte = rel.ok && rel.tela === "cte";
-  $("resultado-titulo").textContent = sucessoCte ? "Pronto! Confira a Digita\xE7\xE3o de CT-e, informe o respons\xE1vel pelo frete combinado e s\xF3 ent\xE3o decida se deve cadastrar." : rel.ok ? `Pronto! Confira a tela de ${TELAS[rel.tela].rotulo} no Sitra e clique em "Cadastrar".` : `Parou: ${rel.erro}`;
+  $("resultado-titulo").textContent = sucessoCte ? "Pronto! Confira a Digita\xE7\xE3o de CT-e, informe o respons\xE1vel pelo frete combinado e s\xF3 ent\xE3o decida se deve cadastrar." : rel.ok ? `Pronto! Confira a tela de ${rotuloTela} no Sitra e clique em "Cadastrar".` : `Parou: ${rel.erro}`;
   const linhas = [
     ...rel.avisos,
     ...rel.campos.map((c) => `${STATUS[c.status]} ${c.rotulo}${c.status === "falhou" ? ` (esperado "${c.esperado}", ficou "${c.obtido}")` : ""}`)
@@ -31428,9 +31662,19 @@ async function preencherSitra() {
     return;
   }
   const form = $("form-conferencia");
-  mostrarAba(form, est.tela);
-  const { valores, invalidos, faltando } = lerFormulario(form, est.tela);
-  const rotuloTela = TELAS[est.tela].rotulo;
+  let aba = est.tela;
+  if (est.tela === "veiculo") {
+    const ativa = abaAtiva(form);
+    if (ativa?.startsWith("veiculo:")) aba = ativa;
+    else if (quantidadeVeiculos(form) > 1) {
+      mostrarAba(form, "veiculo:0");
+      mensagem('H\xE1 mais de um ve\xEDculo. Abra no painel a aba do ve\xEDculo que vai cadastrar e clique em "Preencher no Sitra" de novo.', "alerta");
+      return;
+    } else aba = "veiculo:0";
+  }
+  mostrarAba(form, aba);
+  const { valores, invalidos, faltando } = lerFormulario(form, aba);
+  const rotuloTela = est.tela === "veiculo" ? rotuloDaAba(form, aba) : TELAS[est.tela].rotulo;
   if (invalidos.length) {
     mensagem(`Formato inv\xE1lido (${rotuloTela}): ${invalidos.join(", ")}`);
     return;
@@ -31447,10 +31691,11 @@ async function preencherSitra() {
   }
   confirmarSobrescrita = false;
   if (faltando.length) mensagem(`Vai ficar faltando (${rotuloTela}): ${faltando.join(", ")}`, "alerta");
+  await guardarNoHistorico(dadosDoFormulario(form));
   $("btn-preencher").disabled = true;
   $("btn-preencher").textContent = "Preenchendo\u2026";
   try {
-    mostrarRelatorio(await executarNoSitra((v) => window.__cadastroMotorista.preencher(v), [valoresDaTela(valores, est.tela)]));
+    mostrarRelatorio(await executarNoSitra((v) => window.__cadastroMotorista.preencher(v), [valoresDaTela(valores, est.tela)]), rotuloTela);
   } catch (e) {
     mensagem(`Falha ao preencher: ${e.message}`);
   } finally {
@@ -31460,6 +31705,9 @@ async function preencherSitra() {
 }
 function recomecar() {
   arquivos = [];
+  $("cruzamento").hidden = true;
+  registroAtual = null;
+  atualizarBotaoHistorico();
   $("mensagens").value = "";
   listarArquivos();
   mensagem("");
@@ -31479,7 +31727,7 @@ function aplicarModo(novoModo) {
   $("titulo-upload").textContent = cte ? "Solte aqui a nota do CT-e" : "Solte aqui os documentos do motorista";
   $("texto-upload").textContent = cte ? "foto ou PDF \u2014 ou clique para escolher" : "fotos, PDFs ou o .zip da conversa \u2014 ou clique para escolher";
   $("bloco-mensagens").hidden = cte;
-  $("instrucao-preenchimento").textContent = cte ? "No Sitra, abra Digita\xE7\xE3o de CT-e e escolha o Tipo de Frete antes de preencher." : 'Ordem no Sitra: Propriet\xE1rio \u2192 Ve\xEDculo \u2192 Motorista. Abra a tela e clique em "Preencher".';
+  $("instrucao-preenchimento").textContent = cte ? "No Sitra, abra Digita\xE7\xE3o de CT-e e escolha o Tipo de Frete antes de preencher." : 'Ordem no Sitra: Propriet\xE1rio \u2192 Ve\xEDculo (um cadastro por placa: cavalo e carreta) \u2192 Motorista. Abra a tela e clique em "Preencher".';
   $("btn-preencher").textContent = cte ? "Preencher CT-e" : "Preencher no Sitra";
   $("btn-novo").textContent = cte ? "Pr\xF3ximo CT-e" : "Pr\xF3ximo motorista";
   recomecar();
@@ -31505,6 +31753,11 @@ $("zona").addEventListener("keydown", (e) => {
   }
 });
 $("btn-ler").addEventListener("click", lerDocumentos);
+$("btn-historico").addEventListener("click", abrirHistorico);
+$("crm-entrar").addEventListener("click", entrarNoCrm);
+$("crm-sair").addEventListener("click", sairDoCrm);
+$("btn-historico-voltar").addEventListener("click", recomecar);
+$("btn-historico-apagar").addEventListener("click", apagarTudo);
 $("mensagens").addEventListener("input", atualizarBotaoLer);
 $("btn-preencher").addEventListener("click", (e) => {
   e.preventDefault();
@@ -31532,6 +31785,185 @@ $("form-conferencia").addEventListener("click", (e) => {
   if (aba) mostrarAba($("form-conferencia"), aba.dataset.tela);
 });
 for (const botao of document.querySelectorAll("[data-modo]")) botao.addEventListener("click", () => aplicarModo(botao.dataset.modo));
+async function guardarNoHistorico(dados) {
+  try {
+    registroAtual = (await salvarNoHistorico({ id: registroAtual ?? void 0, ...dados })).id;
+  } catch {
+  }
+}
+async function atualizarBotaoHistorico() {
+  const n = modo === "cadastro" ? (await lerHistorico().catch(() => [])).length : 0;
+  $("btn-historico").textContent = `Hist\xF3rico (${n})`;
+  $("btn-historico").hidden = n === 0;
+}
+async function abrirHistorico() {
+  mensagem("");
+  const lista2 = await lerHistorico().catch(() => []);
+  const ul = $("lista-historico");
+  ul.innerHTML = "";
+  for (const r of lista2) {
+    const { nome, cpf, placas, quando } = resumoDoRegistro(r);
+    const li = document.createElement("li");
+    const info2 = document.createElement("div");
+    info2.className = "registro";
+    const titulo = document.createElement("strong");
+    titulo.textContent = nome;
+    const detalhe = document.createElement("small");
+    detalhe.textContent = [quando, cpf && `CPF ${cpf}`, placas.join(", ")].filter(Boolean).join(" \xB7 ");
+    info2.append(titulo, detalhe);
+    const abrir = document.createElement("button");
+    abrir.textContent = "Abrir";
+    abrir.onclick = () => abrirRegistro(r);
+    const excluir = document.createElement("button");
+    excluir.textContent = "Excluir";
+    excluir.className = "secundario";
+    excluir.onclick = async () => {
+      await excluirDoHistorico(r.id).catch(() => {
+      });
+      abrirHistorico();
+    };
+    li.append(info2, abrir, excluir);
+    ul.append(li);
+  }
+  $("historico-vazio").hidden = lista2.length > 0;
+  $("btn-historico-apagar").hidden = lista2.length === 0;
+  $("btn-historico-apagar").classList.remove("confirmar");
+  $("btn-historico-apagar").textContent = "Apagar tudo";
+  mostrar("historico");
+}
+function abrirRegistro(r) {
+  $("form-conferencia").innerHTML = montarFormulario(r.valores ?? {}, r.veiculos ?? []);
+  preencherLista($("avisos"), r.avisos ?? []);
+  registroAtual = r.id;
+  confirmarSobrescrita = false;
+  mensagem("");
+  mostrar("conferencia");
+  mostrarCruzamento();
+}
+async function apagarTudo() {
+  const b = $("btn-historico-apagar");
+  if (!b.classList.contains("confirmar")) {
+    b.classList.add("confirmar");
+    b.textContent = "Clique de novo para apagar tudo";
+    return;
+  }
+  await apagarHistorico().catch(() => {
+  });
+  abrirHistorico();
+}
+async function atualizarCrmConfig() {
+  const sessao = await lerSessao().catch(() => null);
+  $("crm-status").textContent = sessao ? `Conectado como ${sessao.email}.` : "N\xE3o conectado: entre para comparar os documentos com as viagens programadas.";
+  $("crm-login").hidden = !!sessao;
+  $("crm-sair").hidden = !sessao;
+}
+async function entrarNoCrm() {
+  const email = $("crm-email").value.trim();
+  const senha = $("crm-senha").value;
+  if (!email || !senha) {
+    mensagem("Informe o e-mail e a senha do CRM.");
+    return;
+  }
+  $("crm-entrar").disabled = true;
+  try {
+    await salvarSessao(await entrar(email, senha));
+    mensagem("Conectado ao CRM.", "alerta");
+  } catch (e) {
+    mensagem(e.message);
+  } finally {
+    $("crm-senha").value = "";
+    $("crm-entrar").disabled = false;
+    atualizarCrmConfig();
+  }
+}
+async function sairDoCrm() {
+  const sessao = await lerSessao().catch(() => null);
+  if (sessao) await sair(sessao);
+  await salvarSessao(null).catch(() => {
+  });
+  atualizarCrmConfig();
+}
+async function sessaoDoCrm() {
+  const sessao = await lerSessao().catch(() => null);
+  if (!sessao) return null;
+  try {
+    const nova = await renovarSeVencendo(sessao);
+    if (nova !== sessao) await salvarSessao(nova);
+    return nova;
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {
+    });
+    throw e;
+  }
+}
+var SIMBOLO = { ok: "\u2705", diferente: "\u26A0\uFE0F", so_crm: "\u26A0\uFE0F", so_documento: "\u26A0\uFE0F", sem_dado: "\u2014", sem_crm: "\u2014" };
+function textoDoItem(i) {
+  if (i.status === "ok") return `${SIMBOLO.ok} ${i.rotulo}${i.rotulo.startsWith("Placa") ? "" : `: ${i.crm}`}`;
+  if (i.status === "diferente") return `${SIMBOLO.diferente} ${i.rotulo}: CRM "${i.crm}" \xB7 documento "${i.documento}"`;
+  if (i.status === "so_crm") return `${SIMBOLO.so_crm} ${i.rotulo}: est\xE1 na viagem, mas n\xE3o nos documentos`;
+  if (i.status === "so_documento") return `${SIMBOLO.so_documento} ${i.rotulo}: est\xE1 nos documentos, mas n\xE3o na viagem`;
+  if (i.status === "sem_crm") return `${SIMBOLO.sem_crm} ${i.rotulo}: n\xE3o informado na viagem do CRM \xB7 documento "${i.documento}"`;
+  return `${SIMBOLO.sem_dado} ${i.rotulo}: CRM "${i.crm}" \xB7 n\xE3o lido nos documentos`;
+}
+async function mostrarCruzamento() {
+  const caixa = $("cruzamento");
+  const el = (tag, texto, classe) => {
+    const e = document.createElement(tag);
+    if (texto) e.textContent = texto;
+    if (classe) e.className = classe;
+    return e;
+  };
+  const topo = el("div", "", "cruzamento-topo");
+  topo.append(el("strong", "CRM \u2014 viagens programadas"));
+  const nota = (texto) => {
+    caixa.replaceChildren(topo, el("p", texto, "nota"));
+    caixa.hidden = false;
+  };
+  if (modo !== "cadastro") {
+    caixa.hidden = true;
+    return;
+  }
+  let sessao;
+  try {
+    sessao = await sessaoDoCrm();
+  } catch (e) {
+    nota(e.message);
+    return;
+  }
+  if (!sessao) {
+    nota("Entre no CRM nas Configura\xE7\xF5es para comparar com as viagens programadas.");
+    return;
+  }
+  const atualizar = el("button", "Comparar de novo", "secundario");
+  atualizar.type = "button";
+  atualizar.onclick = mostrarCruzamento;
+  topo.append(atualizar);
+  nota("Consultando o CRM\u2026");
+  try {
+    const { valores, veiculos } = dadosDoFormulario($("form-conferencia"));
+    const dados = { cpf: valores.cpf?.valor, nome: valores.nome?.valor, placas: veiculos.map((v) => v.veic_placa?.valor).filter(Boolean) };
+    const achadas = cruzarComViagens(dados, await viagensProgramadas(sessao));
+    if (!achadas.length) {
+      nota("Nenhuma viagem programada com este CPF ou estas placas.");
+      return;
+    }
+    const blocos = achadas.map(({ viagem, itens }) => {
+      const b = el("div", "", "viagem");
+      b.append(el("strong", [viagem.cliente, viagem.data].filter(Boolean).join(" \xB7 ") || "Viagem programada"));
+      const detalhe = [viagem.trajeto, viagem.veiculo].filter(Boolean).join(" \xB7 ");
+      if (detalhe) b.append(el("small", detalhe));
+      const ul = el("ul");
+      for (const i of itens) ul.append(el("li", textoDoItem(i), ["ok", "sem_dado", "sem_crm"].includes(i.status) ? "" : "alerta"));
+      b.append(ul);
+      return b;
+    });
+    caixa.replaceChildren(topo, ...blocos);
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {
+    });
+    nota(e.message);
+  }
+}
 async function verificarAtualizacao() {
   try {
     const r = await fetch("https://api.github.com/repos/breviistransportes/Sitra_automacao/releases/latest");
@@ -31545,6 +31977,7 @@ async function verificarAtualizacao() {
   }
 }
 verificarAtualizacao();
+atualizarBotaoHistorico();
 async function abrirConfig(aviso = "") {
   const cfg = await lerConfig();
   $("cfg-apiKey").value = cfg.apiKey;
@@ -31553,6 +31986,7 @@ async function abrirConfig(aviso = "") {
   $("cfg-emailProprietario").value = cfg.padroes.emailProprietario;
   $("cfg-telefoneProprietario").value = cfg.padroes.telefoneProprietario;
   $("config").hidden = false;
+  atualizarCrmConfig();
   mensagem(aviso, "alerta");
   $("cfg-apiKey").focus();
 }

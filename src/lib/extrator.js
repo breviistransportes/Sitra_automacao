@@ -1,4 +1,4 @@
-import { CAMPOS, TELAS } from './campos.js';
+import { CAMPOS, TELAS, valoresDaTela } from './campos.js';
 import { normalizarCampo, cpfValido, cpfCnpjValido, somenteDigitos, textoSeguro, TEM_CARACTERE_SUSPEITO } from './normalizar.js';
 import { aplicarRegras } from './regras.js';
 import { conferirComTextoPdf, compararLeituras, camposDivergentes, desempatar, CAMPOS_DUPLA_LEITURA } from './conferencia.js';
@@ -6,6 +6,8 @@ import { conferirComTextoPdf, compararLeituras, camposDivergentes, desempatar, C
 export const MODELO = 'gemini-3.8-flash';
 
 export const CAMPOS_IA = CAMPOS.filter(c => c.ia);
+const CAMPOS_GERAIS = CAMPOS.filter(c => c.tela !== 'veiculo');
+const CAMPOS_VEICULO = CAMPOS.filter(c => c.tela === 'veiculo');
 
 export class ErroExtracao extends Error {}
 
@@ -38,7 +40,10 @@ Proprietário (campos prop_*):
 - Só use o PROPRIETÁRIO do CRV/CRLV (nome e CPF/CNPJ) se não houver cartão da ANTT.
 - prop_rg / prop_org_exp: só se houver documento de identidade do proprietário.
 
-Veículo (campos veic_*), do CRV/CRLV:
+Veículos (lista veiculos, campos veic_*), do CRV/CRLV:
+- Um item em veiculos para CADA veículo, ou seja, cada CRV/CRLV de placa diferente: cavalo e carreta (ou cavalo e duas carretas, no bitrem) são veículos separados, cada um com seus próprios dados. Nunca misture dados de dois CRLVs no mesmo item.
+- O mesmo veículo em mais de um arquivo (frente e verso, foto e PDF) é um item só.
+- Sem nenhum CRV/CRLV, veiculos fica [].
 - veic_placa, veic_renavam (CÓDIGO RENAVAM), veic_chassi, veic_cor, veic_ano_fab, veic_ano_modelo.
 - MARCA/MODELO/VERSÃO: veic_marca = parte antes da "/", veic_modelo = o restante.
 - veic_certificado = número do CRV/CRLV (número do documento, não o RENAVAM).
@@ -69,22 +74,28 @@ export function montarSchema() {
     required: ['valor', 'certeza', 'fonte'],
     additionalProperties: false,
   };
+  const objeto = (campos) => {
+    const daIa = campos.filter(c => c.ia);
+    return {
+      type: 'object',
+      properties: Object.fromEntries(daIa.map(c => [c.chave, c.opcoes
+        // Campos de <select>: a IA escolhe entre os rótulos do Sitra ("" = não encontrado).
+        ? { ...campo, properties: { ...campo.properties, valor: { type: 'string', enum: [...c.opcoes.map(o => o[1]), ''] } }, description: c.dica }
+        : { ...campo, description: c.dica }])),
+      required: daIa.map(c => c.chave),
+      additionalProperties: false,
+    };
+  };
   return {
     type: 'object',
     properties: {
-      campos: {
-        type: 'object',
-        properties: Object.fromEntries(CAMPOS_IA.map(c => [c.chave, c.opcoes
-          // Campos de <select>: a IA escolhe entre os rótulos do Sitra ("" = não encontrado).
-          ? { ...campo, properties: { ...campo.properties, valor: { type: 'string', enum: [...c.opcoes.map(o => o[1]), ''] } }, description: c.dica }
-          : { ...campo, description: c.dica }])),
-        required: CAMPOS_IA.map(c => c.chave),
-        additionalProperties: false,
-      },
+      campos: objeto(CAMPOS_GERAIS),
+      // Um item por CRV/CRLV: cavalo e carreta são dois cadastros de veículo no Sitra.
+      veiculos: { type: 'array', items: objeto(CAMPOS_VEICULO) },
       documentos_encontrados: { type: 'array', items: { type: 'string' } },
       avisos: { type: 'array', items: { type: 'string' } },
     },
-    required: ['campos', 'documentos_encontrados', 'avisos'],
+    required: ['campos', 'veiculos', 'documentos_encontrados', 'avisos'],
     additionalProperties: false,
   };
 }
@@ -191,21 +202,23 @@ function contatoNoTexto(campo, valor, texto) {
 
 // textoConfiavel: texto das mensagens + conversas enviadas (undefined = não checar; só em testes antigos).
 export function posProcessar(bruto, padroes, { hoje = new Date(), textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura } = {}) {
-  const valores = {};
   const avisos = [...(bruto?.avisos ?? [])];
-  for (const campo of CAMPOS) {
-    const b = bruto?.campos?.[campo.chave];
+  const lerCampos = (campos, origem, prefixo) => {
+    const lidos = {};
+    for (const campo of campos) lerCampo(campo, origem?.[campo.chave], prefixo(campo), lidos);
+    return lidos;
+  };
+  const lerCampo = (campo, b, nome, valores) => {
     let valor = normalizarCampo(campo, b?.valor ?? '');
     let certeza = b?.certeza === 'alta' ? 'alta' : 'conferir';
     let fonte = nomeSeguro(b?.fonte ?? '');
-    const nome = campo.tela === 'motorista' ? campo.rotulo : `${TELAS[campo.tela].rotulo} — ${campo.rotulo}`;
     const descartar = (motivo) => {
       avisos.push(`${nome}: ignorado "${String(b.valor).slice(0, 60)}" ${motivo}`);
       valores[campo.chave] = { valor: '', certeza: 'conferir', fonte: '' };
     };
     if (CONTATOS.includes(campo.chave) && b?.valor) {
-      if (DE_DOCUMENTO.test((b.fonte ?? '').trim())) { descartar(`de ${fonte} — telefone e e-mail só valem das mensagens`); continue; }
-      if (textoConfiavel !== undefined && valor && !contatoNoTexto(campo, valor, textoConfiavel)) { descartar('— não aparece nas mensagens'); continue; }
+      if (DE_DOCUMENTO.test((b.fonte ?? '').trim())) { descartar(`de ${fonte} — telefone e e-mail só valem das mensagens`); return; }
+      if (textoConfiavel !== undefined && valor && !contatoNoTexto(campo, valor, textoConfiavel)) { descartar('— não aparece nas mensagens'); return; }
     }
     if (b?.valor && TEM_CARACTERE_SUSPEITO.test(b.valor)) {
       avisos.push(`${nome}: caracteres estranhos removidos — confira`);
@@ -222,7 +235,11 @@ export function posProcessar(bruto, padroes, { hoje = new Date(), textoConfiavel
     }
     if (!valor) certeza = 'conferir';
     valores[campo.chave] = { valor, certeza, fonte };
-  }
+  };
+  const valores = lerCampos(CAMPOS_GERAIS, bruto?.campos, c => (c.tela === 'motorista' ? c.rotulo : `${TELAS[c.tela].rotulo} — ${c.rotulo}`));
+  const brutos = veiculosBrutos(bruto?.veiculos);
+  const rotuloVeiculo = (i) => (brutos.length > 1 ? `Veículo ${i + 1}` : 'Veículo');
+  const veiculos = brutos.map((b, i) => lerCampos(CAMPOS_VEICULO, b, c => `${rotuloVeiculo(i)} — ${c.rotulo}`));
   if (!valores.fone_residencial.valor && valores.celular.valor) {
     valores.fone_residencial = { ...valores.celular, fonte: 'igual ao celular' };
   }
@@ -247,6 +264,31 @@ export function posProcessar(bruto, padroes, { hoje = new Date(), textoConfiavel
   const segundaSemDivergentes = segundaLeitura && Object.fromEntries(Object.entries(segundaLeitura).filter(([k]) => !divergentes.includes(k)));
   let conferidos = compararLeituras(valores, segundaSemDivergentes, avisos);
   if (terceiraLeitura) conferidos = desempatar(conferidos, segundaLeitura, terceiraLeitura, avisos);
-  conferidos = conferirComTextoPdf(conferidos, textoPdf, avisos);
-  return { valores: aplicarRegras(conferidos, { hoje, padroes }), avisos, documentos: bruto?.documentos_encontrados ?? [] };
+  const veiculosConferidos = veiculos.map((v, i) => conferirComTextoPdf(v, textoPdf, avisos, brutos.length > 1 ? `${rotuloVeiculo(i)} — ` : ''));
+  // Regras rodam por veículo (CPF/CNPJ do proprietário, vencimentos). O primeiro é o cavalo: a placa dele vai para o motorista.
+  const comRegras = veiculosConferidos.map(v => aplicarRegras({ ...conferidos, ...v }, { hoje, padroes }));
+  const geral = Object.fromEntries(Object.entries(comRegras[0]).filter(([k]) => !k.startsWith('veic_')));
+  return {
+    valores: geral,
+    veiculos: comRegras.map(v => valoresDaTela(v, 'veiculo')),
+    avisos,
+    documentos: bruto?.documentos_encontrados ?? [],
+  };
+}
+
+const placaDe = (b) => String(b?.veic_placa?.valor ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const ehCarreta = (b) => /carreta|reboque/i.test(String(b?.veic_tipo?.valor ?? ''));
+
+// Veículos que a IA devolveu: sem itens vazios, a mesma placa (frente/verso) juntada num só, carretas por último.
+// Sem nenhum, um veículo vazio — a aba de veículo continua existindo para preencher à mão.
+function veiculosBrutos(lista) {
+  const juntos = [];
+  for (const b of Array.isArray(lista) ? lista : []) {
+    if (!b || !Object.values(b).some(c => String(c?.valor ?? '').trim())) continue;
+    const igual = placaDe(b) && juntos.find(j => placaDe(j) === placaDe(b));
+    if (!igual) { juntos.push({ ...b }); continue; }
+    for (const [chave, c] of Object.entries(b)) if (!String(igual[chave]?.valor ?? '').trim()) igual[chave] = c;
+  }
+  const ordenados = [...juntos.filter(b => !ehCarreta(b)), ...juntos.filter(ehCarreta)];
+  return ordenados.length ? ordenados : [{}];
 }

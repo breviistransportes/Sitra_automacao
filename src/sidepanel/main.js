@@ -5,7 +5,10 @@ import { chamarGeminiCte, posProcessarCte } from '../lib/extrator-cte.js';
 import { textoDoPdf } from '../lib/pdf.js';
 import { camposDivergentes } from '../lib/conferencia.js';
 import { lerConfig, salvarConfig } from '../lib/config.js';
-import { montarFormulario, lerFormulario, mostrarAba } from './formulario.js';
+import { montarFormulario, lerFormulario, mostrarAba, abaAtiva, quantidadeVeiculos, rotuloDaAba, dadosDoFormulario } from './formulario.js';
+import { entrar, sair, renovarSeVencendo, viagensProgramadas, lerSessao, salvarSessao } from '../lib/crm.js';
+import { cruzarComViagens } from '../lib/cruzamento.js';
+import { lerHistorico, salvarNoHistorico, excluirDoHistorico, apagarHistorico, resumoDoRegistro } from '../lib/historico.js';
 import { montarFormularioCte, lerFormularioCte } from './formulario-cte.js';
 import { versaoMaior, linkAtualizacaoValido } from '../lib/versao.js';
 import { TELAS, CAMPO_POR_CHAVE, ehSitra, valoresDaTela } from '../lib/campos.js';
@@ -17,6 +20,8 @@ const $ = (id) => document.getElementById(id);
 let arquivos = [];
 let confirmarSobrescrita = false;
 let modo = 'cadastro';
+// Cadastro do histórico que está aberto na conferência (atualizado a cada "Preencher no Sitra").
+let registroAtual = null;
 
 function mostrar(etapa) {
   for (const s of document.querySelectorAll('section[data-etapa]')) s.hidden = s.dataset.etapa !== etapa;
@@ -108,9 +113,13 @@ async function lerDocumentos() {
       ? await chamarGeminiConferencia(cfg.apiKey, docs).catch(() => null)
       : null;
     const r = posProcessar(bruto, cfg.padroes, { textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura });
-    $('form-conferencia').innerHTML = montarFormulario(r.valores);
+    $('form-conferencia').innerHTML = montarFormulario(r.valores, r.veiculos);
     const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(', ')}`] : [];
-    preencherLista($('avisos'), [...docsLidos, ...avisosEntrada, ...r.avisos]);
+    const avisos = [...docsLidos, ...avisosEntrada, ...r.avisos];
+    preencherLista($('avisos'), avisos);
+    registroAtual = null;
+    await guardarNoHistorico({ valores: r.valores, veiculos: r.veiculos, avisos });
+    mostrarCruzamento();
     confirmarSobrescrita = false;
     mostrar('conferencia');
   } catch (e) {
@@ -131,12 +140,12 @@ async function executarNoSitra(func, args = []) {
 
 const STATUS = { ok: '✅', sitra: '🔵 veio do Sitra (CEP) —', falhou: '⚠️ não gravou —', vazio: '⚠️ obrigatório vazio —' };
 
-function mostrarRelatorio(rel) {
+function mostrarRelatorio(rel, rotuloTela = TELAS[rel.tela]?.rotulo) {
   const sucessoCte = rel.ok && rel.tela === 'cte';
   $('resultado-titulo').textContent = sucessoCte
     ? 'Pronto! Confira a Digitação de CT-e, informe o responsável pelo frete combinado e só então decida se deve cadastrar.'
     : rel.ok
-    ? `Pronto! Confira a tela de ${TELAS[rel.tela].rotulo} no Sitra e clique em "Cadastrar".`
+    ? `Pronto! Confira a tela de ${rotuloTela} no Sitra e clique em "Cadastrar".`
     : `Parou: ${rel.erro}`;
   const linhas = [
     ...rel.avisos,
@@ -176,9 +185,21 @@ async function preencherSitra() {
   if (!est?.tela) { mensagem('Abra no Sitra a tela de Cadastro de Motorista, de Proprietário ou de Veículo nesta aba.'); return; }
 
   const form = $('form-conferencia');
-  mostrarAba(form, est.tela);
-  const { valores, invalidos, faltando } = lerFormulario(form, est.tela);
-  const rotuloTela = TELAS[est.tela].rotulo;
+  // Tela de Veículo: preenche o veículo da aba aberta no painel (cavalo e carreta são cadastros separados).
+  let aba = est.tela;
+  if (est.tela === 'veiculo') {
+    const ativa = abaAtiva(form);
+    if (ativa?.startsWith('veiculo:')) aba = ativa;
+    else if (quantidadeVeiculos(form) > 1) {
+      mostrarAba(form, 'veiculo:0');
+      mensagem('Há mais de um veículo. Abra no painel a aba do veículo que vai cadastrar e clique em "Preencher no Sitra" de novo.', 'alerta');
+      return;
+    }
+    else aba = 'veiculo:0';
+  }
+  mostrarAba(form, aba);
+  const { valores, invalidos, faltando } = lerFormulario(form, aba);
+  const rotuloTela = est.tela === 'veiculo' ? rotuloDaAba(form, aba) : TELAS[est.tela].rotulo;
   if (invalidos.length) { mensagem(`Formato inválido (${rotuloTela}): ${invalidos.join(', ')}`); return; }
   const doc = DOCUMENTO[est.tela];
   if (!valores[doc]) { mensagem(`${CAMPO_POR_CHAVE[doc].rotulo} é obrigatório para preencher a tela de ${rotuloTela}.`); return; }
@@ -190,10 +211,12 @@ async function preencherSitra() {
   confirmarSobrescrita = false;
   if (faltando.length) mensagem(`Vai ficar faltando (${rotuloTela}): ${faltando.join(', ')}`, 'alerta');
 
+  // O que está na tela agora (com as correções do operador) vai para o histórico.
+  await guardarNoHistorico(dadosDoFormulario(form));
   $('btn-preencher').disabled = true;
   $('btn-preencher').textContent = 'Preenchendo…';
   try {
-    mostrarRelatorio(await executarNoSitra((v) => window.__cadastroMotorista.preencher(v), [valoresDaTela(valores, est.tela)]));
+    mostrarRelatorio(await executarNoSitra((v) => window.__cadastroMotorista.preencher(v), [valoresDaTela(valores, est.tela)]), rotuloTela);
   } catch (e) {
     mensagem(`Falha ao preencher: ${e.message}`);
   } finally {
@@ -204,6 +227,9 @@ async function preencherSitra() {
 
 function recomecar() {
   arquivos = [];
+  $('cruzamento').hidden = true;
+  registroAtual = null;
+  atualizarBotaoHistorico();
   $('mensagens').value = '';
   listarArquivos();
   mensagem('');
@@ -226,7 +252,7 @@ function aplicarModo(novoModo) {
   $('bloco-mensagens').hidden = cte;
   $('instrucao-preenchimento').textContent = cte
     ? 'No Sitra, abra Digitação de CT-e e escolha o Tipo de Frete antes de preencher.'
-    : 'Ordem no Sitra: Proprietário → Veículo → Motorista. Abra a tela e clique em "Preencher".';
+    : 'Ordem no Sitra: Proprietário → Veículo (um cadastro por placa: cavalo e carreta) → Motorista. Abra a tela e clique em "Preencher".';
   $('btn-preencher').textContent = cte ? 'Preencher CT-e' : 'Preencher no Sitra';
   $('btn-novo').textContent = cte ? 'Próximo CT-e' : 'Próximo motorista';
   recomecar();
@@ -241,6 +267,11 @@ $('zona').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('seletor').click(); }
 });
 $('btn-ler').addEventListener('click', lerDocumentos);
+$('btn-historico').addEventListener('click', abrirHistorico);
+$('crm-entrar').addEventListener('click', entrarNoCrm);
+$('crm-sair').addEventListener('click', sairDoCrm);
+$('btn-historico-voltar').addEventListener('click', recomecar);
+$('btn-historico-apagar').addEventListener('click', apagarTudo);
 $('mensagens').addEventListener('input', atualizarBotaoLer);
 $('btn-preencher').addEventListener('click', (e) => { e.preventDefault(); preencherSitra(); });
 $('btn-recomecar').addEventListener('click', recomecar);
@@ -257,6 +288,174 @@ $('form-conferencia').addEventListener('click', (e) => {
 });
 for (const botao of document.querySelectorAll('[data-modo]')) botao.addEventListener('click', () => aplicarModo(botao.dataset.modo));
 
+// Histórico: falhar ao guardar não pode atrapalhar a leitura nem o preenchimento.
+async function guardarNoHistorico(dados) {
+  try {
+    registroAtual = (await salvarNoHistorico({ id: registroAtual ?? undefined, ...dados })).id;
+  } catch {
+    // sem histórico desta vez
+  }
+}
+
+async function atualizarBotaoHistorico() {
+  const n = modo === 'cadastro' ? (await lerHistorico().catch(() => [])).length : 0;
+  $('btn-historico').textContent = `Histórico (${n})`;
+  $('btn-historico').hidden = n === 0;
+}
+
+async function abrirHistorico() {
+  mensagem('');
+  const lista = await lerHistorico().catch(() => []);
+  const ul = $('lista-historico');
+  ul.innerHTML = '';
+  for (const r of lista) {
+    const { nome, cpf, placas, quando } = resumoDoRegistro(r);
+    const li = document.createElement('li');
+    const info = document.createElement('div');
+    info.className = 'registro';
+    const titulo = document.createElement('strong');
+    titulo.textContent = nome;
+    const detalhe = document.createElement('small');
+    detalhe.textContent = [quando, cpf && `CPF ${cpf}`, placas.join(', ')].filter(Boolean).join(' · ');
+    info.append(titulo, detalhe);
+    const abrir = document.createElement('button');
+    abrir.textContent = 'Abrir';
+    abrir.onclick = () => abrirRegistro(r);
+    const excluir = document.createElement('button');
+    excluir.textContent = 'Excluir';
+    excluir.className = 'secundario';
+    excluir.onclick = async () => { await excluirDoHistorico(r.id).catch(() => {}); abrirHistorico(); };
+    li.append(info, abrir, excluir);
+    ul.append(li);
+  }
+  $('historico-vazio').hidden = lista.length > 0;
+  $('btn-historico-apagar').hidden = lista.length === 0;
+  $('btn-historico-apagar').classList.remove('confirmar');
+  $('btn-historico-apagar').textContent = 'Apagar tudo';
+  mostrar('historico');
+}
+
+function abrirRegistro(r) {
+  $('form-conferencia').innerHTML = montarFormulario(r.valores ?? {}, r.veiculos ?? []);
+  preencherLista($('avisos'), r.avisos ?? []);
+  registroAtual = r.id;
+  confirmarSobrescrita = false;
+  mensagem('');
+  mostrar('conferencia');
+  mostrarCruzamento();
+}
+
+// Sem confirm() do navegador: o primeiro clique só pede confirmação, o segundo apaga.
+async function apagarTudo() {
+  const b = $('btn-historico-apagar');
+  if (!b.classList.contains('confirmar')) {
+    b.classList.add('confirmar');
+    b.textContent = 'Clique de novo para apagar tudo';
+    return;
+  }
+  await apagarHistorico().catch(() => {});
+  abrirHistorico();
+}
+
+// CRM: login do operador nas Configurações; a sessão (não a senha) fica no Chrome.
+async function atualizarCrmConfig() {
+  const sessao = await lerSessao().catch(() => null);
+  $('crm-status').textContent = sessao ? `Conectado como ${sessao.email}.` : 'Não conectado: entre para comparar os documentos com as viagens programadas.';
+  $('crm-login').hidden = !!sessao;
+  $('crm-sair').hidden = !sessao;
+}
+
+async function entrarNoCrm() {
+  const email = $('crm-email').value.trim();
+  const senha = $('crm-senha').value;
+  if (!email || !senha) { mensagem('Informe o e-mail e a senha do CRM.'); return; }
+  $('crm-entrar').disabled = true;
+  try {
+    await salvarSessao(await entrar(email, senha));
+    mensagem('Conectado ao CRM.', 'alerta');
+  } catch (e) {
+    mensagem(e.message);
+  } finally {
+    $('crm-senha').value = '';
+    $('crm-entrar').disabled = false;
+    atualizarCrmConfig();
+  }
+}
+
+async function sairDoCrm() {
+  const sessao = await lerSessao().catch(() => null);
+  if (sessao) await sair(sessao);
+  await salvarSessao(null).catch(() => {});
+  atualizarCrmConfig();
+}
+
+// Sessão pronta para usar (renovada se estiver vencendo). Recusada pelo CRM: apaga e pede login de novo.
+async function sessaoDoCrm() {
+  const sessao = await lerSessao().catch(() => null);
+  if (!sessao) return null;
+  try {
+    const nova = await renovarSeVencendo(sessao);
+    if (nova !== sessao) await salvarSessao(nova);
+    return nova;
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {});
+    throw e;
+  }
+}
+
+const SIMBOLO = { ok: '✅', diferente: '⚠️', so_crm: '⚠️', so_documento: '⚠️', sem_dado: '—', sem_crm: '—' };
+function textoDoItem(i) {
+  if (i.status === 'ok') return `${SIMBOLO.ok} ${i.rotulo}${i.rotulo.startsWith('Placa') ? '' : `: ${i.crm}`}`;
+  if (i.status === 'diferente') return `${SIMBOLO.diferente} ${i.rotulo}: CRM "${i.crm}" · documento "${i.documento}"`;
+  if (i.status === 'so_crm') return `${SIMBOLO.so_crm} ${i.rotulo}: está na viagem, mas não nos documentos`;
+  if (i.status === 'so_documento') return `${SIMBOLO.so_documento} ${i.rotulo}: está nos documentos, mas não na viagem`;
+  if (i.status === 'sem_crm') return `${SIMBOLO.sem_crm} ${i.rotulo}: não informado na viagem do CRM · documento "${i.documento}"`;
+  return `${SIMBOLO.sem_dado} ${i.rotulo}: CRM "${i.crm}" · não lido nos documentos`;
+}
+
+// Quadro "viagem programada": compara o que está no painel com o CRM. Só mostra — não preenche nada.
+async function mostrarCruzamento() {
+  const caixa = $('cruzamento');
+  const el = (tag, texto, classe) => { const e = document.createElement(tag); if (texto) e.textContent = texto; if (classe) e.className = classe; return e; };
+  const topo = el('div', '', 'cruzamento-topo');
+  topo.append(el('strong', 'CRM — viagens programadas'));
+  const nota = (texto) => { caixa.replaceChildren(topo, el('p', texto, 'nota')); caixa.hidden = false; };
+  if (modo !== 'cadastro') { caixa.hidden = true; return; }
+  let sessao;
+  try {
+    sessao = await sessaoDoCrm();
+  } catch (e) {
+    nota(e.message);
+    return;
+  }
+  if (!sessao) { nota('Entre no CRM nas Configurações para comparar com as viagens programadas.'); return; }
+  const atualizar = el('button', 'Comparar de novo', 'secundario');
+  atualizar.type = 'button';
+  atualizar.onclick = mostrarCruzamento;
+  topo.append(atualizar);
+  nota('Consultando o CRM…');
+  try {
+    const { valores, veiculos } = dadosDoFormulario($('form-conferencia'));
+    const dados = { cpf: valores.cpf?.valor, nome: valores.nome?.valor, placas: veiculos.map(v => v.veic_placa?.valor).filter(Boolean) };
+    const achadas = cruzarComViagens(dados, await viagensProgramadas(sessao));
+    if (!achadas.length) { nota('Nenhuma viagem programada com este CPF ou estas placas.'); return; }
+    const blocos = achadas.map(({ viagem, itens }) => {
+      const b = el('div', '', 'viagem');
+      b.append(el('strong', [viagem.cliente, viagem.data].filter(Boolean).join(' · ') || 'Viagem programada'));
+      const detalhe = [viagem.trajeto, viagem.veiculo].filter(Boolean).join(' · ');
+      if (detalhe) b.append(el('small', detalhe));
+      const ul = el('ul');
+      for (const i of itens) ul.append(el('li', textoDoItem(i), ['ok', 'sem_dado', 'sem_crm'].includes(i.status) ? '' : 'alerta'));
+      b.append(ul);
+      return b;
+    });
+    caixa.replaceChildren(topo, ...blocos);
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {});
+    nota(e.message);
+  }
+}
+
 // Aviso de versão nova publicada no GitHub (Releases). Sem internet ou sem release: não mostra nada.
 async function verificarAtualizacao() {
   try {
@@ -272,6 +471,7 @@ async function verificarAtualizacao() {
   }
 }
 verificarAtualizacao();
+atualizarBotaoHistorico();
 
 // Configurações dentro do próprio painel (não depende da página de opções do Chrome).
 async function abrirConfig(aviso = '') {
@@ -282,6 +482,7 @@ async function abrirConfig(aviso = '') {
   $('cfg-emailProprietario').value = cfg.padroes.emailProprietario;
   $('cfg-telefoneProprietario').value = cfg.padroes.telefoneProprietario;
   $('config').hidden = false;
+  atualizarCrmConfig();
   mensagem(aviso, 'alerta');
   $('cfg-apiKey').focus();
 }
