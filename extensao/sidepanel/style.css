@@ -115,8 +115,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 }
 #mensagem.erro { background: var(--error-bg); border-color: transparent; color: var(--error-text); }
 #mensagem.alerta { background: var(--warn-bg); border-color: transparent; color: var(--warn-text); }
-#atualizacao { background: var(--accent-soft); border-color: transparent; }
-#atualizacao a { font-weight: 600; }
+#atualizacao { display: grid; gap: 4px; background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-text); }
+#atualizacao a { font-weight: 650; text-decoration: underline; }
+#atualizacao small { font-size: 12px; }
 
 /* Configurações */
 #config {

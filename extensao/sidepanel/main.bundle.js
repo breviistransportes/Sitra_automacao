@@ -31495,6 +31495,9 @@ function versaoMaior(nova, atual) {
   }
   return false;
 }
+function textoAtualizacao(tag, atual) {
+  return `Voc\xEA est\xE1 na v${String(atual).replace(/^v/i, "")} \u2014 a ${tag} j\xE1 est\xE1 dispon\xEDvel.`;
+}
 
 // src/lib/rota-maps.js
 var HOSTS_MAPS = ["maps.app.goo.gl", "maps.google.com", "www.google.com", "google.com"];
@@ -32251,14 +32254,16 @@ async function verificarAtualizacao() {
     const r = await fetch("https://api.github.com/repos/breviistransportes/Sitra_automacao/releases/latest");
     if (!r.ok) return;
     const { tag_name: tag, html_url: url } = await r.json();
-    if (!linkAtualizacaoValido(tag, url) || !versaoMaior(tag, chrome.runtime.getManifest().version)) return;
+    const atual = chrome.runtime.getManifest().version;
+    if (!linkAtualizacaoValido(tag, url) || !versaoMaior(tag, atual)) return;
+    $("texto-atualizacao").textContent = textoAtualizacao(tag, atual);
     $("link-atualizacao").href = url;
-    $("link-atualizacao").textContent = `Nova vers\xE3o ${tag} dispon\xEDvel \u2014 baixar`;
     $("atualizacao").hidden = false;
   } catch {
   }
 }
 verificarAtualizacao();
+setInterval(verificarAtualizacao, 6 * 60 * 60 * 1e3);
 atualizarBotaoHistorico();
 async function abrirConfig(aviso = "") {
   const cfg = await lerConfig();

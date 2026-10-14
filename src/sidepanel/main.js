@@ -10,7 +10,7 @@ import { entrar, sair, renovarSeVencendo, viagensProgramadas, lerSessao, salvarS
 import { cruzarComViagens } from '../lib/cruzamento.js';
 import { lerHistorico, salvarNoHistorico, excluirDoHistorico, apagarHistorico, resumoDoRegistro } from '../lib/historico.js';
 import { montarFormularioCte, lerFormularioCte } from './formulario-cte.js';
-import { versaoMaior, linkAtualizacaoValido } from '../lib/versao.js';
+import { versaoMaior, linkAtualizacaoValido, textoAtualizacao } from '../lib/versao.js';
 import { TELAS, CAMPO_POR_CHAVE, ehSitra, valoresDaTela } from '../lib/campos.js';
 import { buscarTrajeto } from '../lib/rota-maps.js';
 import { pracasNaRota, ehSemParar } from '../lib/pedagios.js';
@@ -540,15 +540,18 @@ async function verificarAtualizacao() {
     const r = await fetch('https://api.github.com/repos/breviistransportes/Sitra_automacao/releases/latest');
     if (!r.ok) return;
     const { tag_name: tag, html_url: url } = await r.json();
-    if (!linkAtualizacaoValido(tag, url) || !versaoMaior(tag, chrome.runtime.getManifest().version)) return;
+    const atual = chrome.runtime.getManifest().version;
+    if (!linkAtualizacaoValido(tag, url) || !versaoMaior(tag, atual)) return;
+    $('texto-atualizacao').textContent = textoAtualizacao(tag, atual);
     $('link-atualizacao').href = url;
-    $('link-atualizacao').textContent = `Nova versão ${tag} disponível — baixar`;
     $('atualizacao').hidden = false;
   } catch {
     // silencioso: o aviso é só uma conveniência
   }
 }
 verificarAtualizacao();
+// O painel pode ficar aberto o dia todo: confere de novo a cada 6 horas.
+setInterval(verificarAtualizacao, 6 * 60 * 60 * 1000);
 atualizarBotaoHistorico();
 
 // Configurações dentro do próprio painel (não depende da página de opções do Chrome).

@@ -19,7 +19,11 @@
       <button type="button" class="modo" data-modo="cte" aria-selected="false">CT-e manual</button>
       <button type="button" class="modo" data-modo="pedagios" aria-selected="false">Pedágios</button>
     </div>
-    <p id="atualizacao" hidden><a id="link-atualizacao" target="_blank" rel="noopener"></a></p>
+    <div id="atualizacao" role="alert" hidden>
+      <strong id="texto-atualizacao"></strong>
+      <a id="link-atualizacao" target="_blank" rel="noopener">Baixar a nova versão</a>
+      <small>Extraia o .zip por cima da mesma pasta e, em chrome://extensions, clique em recarregar (↻) na extensão.</small>
+    </div>
     <p id="mensagem" role="status" aria-live="polite" hidden></p>
 
     <section id="config" hidden aria-labelledby="config-titulo">

@@ -86,11 +86,13 @@ Precisa de [Node.js](https://nodejs.org) 20+: `npm install`, depois:
 
 ## Publicar uma versão nova
 
-1. Aumente `"version"` em `extensao/manifest.json` (ex.: `0.3.0`) e faça o commit/push em `main`.
-2. `npm test` e `npm run empacotar` (gera `cadastro-motorista-sitra.zip`).
-3. `gh release create v0.3.0 cadastro-motorista-sitra.zip --target main --title "v0.3.0" --notes "…"`
+1. Aumente `"version"` em `extensao/manifest.json` (ex.: `0.12.0`) e rode `npm test`.
+2. Faça o commit e leve para a `main` (push direto ou PR mesclado).
 
-Os computadores com a extensão passam a ver o aviso "Nova versão disponível".
+Pronto: o workflow **Release** (`.github/workflows/release.yml`) roda os testes, monta o `cadastro-motorista-sitra.zip`
+e publica a release `v0.12.0`. A partir daí o painel de todos os computadores mostra a faixa
+"Você está na vX — a v0.12.0 já está disponível". Versão que já tem release é ignorada; para refazer, apague a release
+no GitHub e rode o workflow à mão (Actions → Release → Run workflow).
 **Não** use o botão verde "Code → Download ZIP" para instalar: ele traz o código-fonte, sem a extensão montada.
 
 ## Segurança e LGPD

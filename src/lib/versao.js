@@ -15,3 +15,7 @@ export function versaoMaior(nova, atual) {
   }
   return false;
 }
+
+export function textoAtualizacao(tag, atual) {
+  return `Você está na v${String(atual).replace(/^v/i, '')} — a ${tag} já está disponível.`;
+}
