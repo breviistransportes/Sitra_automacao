@@ -1,8 +1,8 @@
 // src/lib/config.js
 var PADROES = { propriedade: "3", nacionalidade: "BRASILEIRA", emailProprietario: "comercial2@breviis.com.br", telefoneProprietario: "" };
 async function lerConfig(storage = chrome.storage.local) {
-  const r = await storage.get(["apiKey", "padroes"]);
-  return { apiKey: r.apiKey ?? "", padroes: { ...PADROES, ...r.padroes ?? {} } };
+  const r = await storage.get(["apiKey", "mapsKey", "padroes"]);
+  return { apiKey: r.apiKey ?? "", mapsKey: r.mapsKey ?? "", padroes: { ...PADROES, ...r.padroes ?? {} } };
 }
 async function salvarConfig(cfg2, storage = chrome.storage.local) {
   await storage.set(cfg2);

@@ -31207,8 +31207,8 @@ async function textoDoPdf(bytes) {
 // src/lib/config.js
 var PADROES = { propriedade: "3", nacionalidade: "BRASILEIRA", emailProprietario: "comercial2@breviis.com.br", telefoneProprietario: "" };
 async function lerConfig(storage = chrome.storage.local) {
-  const r = await storage.get(["apiKey", "padroes"]);
-  return { apiKey: r.apiKey ?? "", padroes: { ...PADROES, ...r.padroes ?? {} } };
+  const r = await storage.get(["apiKey", "mapsKey", "padroes"]);
+  return { apiKey: r.apiKey ?? "", mapsKey: r.mapsKey ?? "", padroes: { ...PADROES, ...r.padroes ?? {} } };
 }
 async function salvarConfig(cfg, storage = chrome.storage.local) {
   await storage.set(cfg);
@@ -31496,6 +31496,190 @@ function versaoMaior(nova, atual) {
   return false;
 }
 
+// src/lib/rota-maps.js
+var HOSTS_MAPS = ["maps.app.goo.gl", "maps.google.com", "www.google.com", "google.com"];
+function ehLinkMaps(texto) {
+  try {
+    const u = new URL(texto);
+    if (u.protocol !== "https:" || !HOSTS_MAPS.includes(u.hostname)) return false;
+    return u.hostname.endsWith("google.com") && u.hostname !== "maps.google.com" ? u.pathname.startsWith("/maps") : true;
+  } catch {
+    return false;
+  }
+}
+var COORDENADA = /^(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)$/;
+function ponto(endereco) {
+  const texto = endereco.trim();
+  const m = texto.match(COORDENADA);
+  return m ? { endereco: texto, lat: Number(m[1]), lng: Number(m[2]) } : { endereco: texto };
+}
+function coordenadaDoGeocode(item) {
+  try {
+    const bin = atob(decodeURIComponent(item).replace(/-/g, "+").replace(/_/g, "/"));
+    const b = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    const int32 = (i) => new DataView(b.buffer).getInt32(i, true) / 1e6;
+    let lat, lng;
+    for (let i = 0; i + 5 <= b.length; ) {
+      const tag = b[i];
+      if (tag === 21) lat = int32(i + 1);
+      else if (tag === 29) lng = int32(i + 1);
+      else break;
+      i += 5;
+    }
+    return lat !== void 0 && lng !== void 0 ? { lat, lng } : null;
+  } catch {
+    return null;
+  }
+}
+function lerLinkMaps(texto) {
+  if (!ehLinkMaps(texto) || texto.includes("maps.app.goo.gl")) return [];
+  const u = new URL(texto);
+  let pontos = [];
+  const origem = u.searchParams.get("saddr");
+  const destinos = u.searchParams.get("daddr");
+  if (origem && destinos) {
+    pontos = [origem, ...destinos.split(/\s+to:/)].map(ponto);
+    const geocode = (u.searchParams.get("geocode") ?? "").split(";").filter(Boolean).map(coordenadaDoGeocode);
+    if (geocode.length === pontos.length && geocode.every(Boolean)) {
+      pontos = pontos.map((p, i) => ({ ...p, ...geocode[i] }));
+    }
+  } else if (u.pathname.startsWith("/maps/dir/")) {
+    pontos = u.pathname.slice("/maps/dir/".length).split("/").filter((s) => s && !s.startsWith("@") && !s.startsWith("data=")).map((s) => ponto(decodeURIComponent(s.replace(/\+/g, " "))));
+  }
+  return pontos.length >= 2 ? pontos : [];
+}
+function decodificarPolyline(codigo) {
+  const pontos = [];
+  let i = 0, lat = 0, lng = 0;
+  const proximo = () => {
+    let resultado = 0, deslocamento = 0, b;
+    do {
+      b = codigo.charCodeAt(i++) - 63;
+      resultado |= (b & 31) << deslocamento;
+      deslocamento += 5;
+    } while (b >= 32);
+    return resultado & 1 ? ~(resultado >> 1) : resultado >> 1;
+  };
+  while (i < codigo.length) {
+    lat += proximo();
+    lng += proximo();
+    pontos.push([lat / 1e5, lng / 1e5]);
+  }
+  return pontos;
+}
+function waypoint(p) {
+  return p.lat !== void 0 ? { location: { latLng: { latitude: p.lat, longitude: p.lng } } } : { address: p.endereco };
+}
+function pedidoDeRota(pontos) {
+  return {
+    origin: waypoint(pontos[0]),
+    destination: waypoint(pontos.at(-1)),
+    intermediates: pontos.slice(1, -1).map(waypoint),
+    travelMode: "DRIVE",
+    polylineQuality: "HIGH_QUALITY",
+    languageCode: "pt-BR"
+  };
+}
+var ROUTES_API = "https://routes.googleapis.com/directions/v2:computeRoutes";
+async function linkCompleto(link, fetchFn) {
+  if (new URL(link).hostname !== "maps.app.goo.gl") return link;
+  const r = await fetchFn(link, { method: "HEAD" });
+  const final = new URL(r.url);
+  return final.hostname === "consent.google.com" ? final.searchParams.get("continue") ?? "" : final.href;
+}
+async function buscarTrajeto(link, chave, fetchFn = fetch) {
+  const texto = (link ?? "").trim();
+  if (!ehLinkMaps(texto)) throw new Error("Cole o link do Google Maps que o motorista mandou.");
+  const pontos = lerLinkMaps(await linkCompleto(texto, fetchFn));
+  if (pontos.length < 2) throw new Error("O link n\xE3o tem uma rota (origem e destino). Pe\xE7a ao motorista o link da rota, n\xE3o de um lugar.");
+  const r = await fetchFn(ROUTES_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": chave,
+      "X-Goog-FieldMask": "routes.polyline.encodedPolyline,routes.distanceMeters"
+    },
+    body: JSON.stringify(pedidoDeRota(pontos))
+  });
+  const dados = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const detalhe = dados?.error?.message ?? `HTTP ${r.status}`;
+    if (r.status === 403 || /api key/i.test(detalhe)) throw new Error(`Chave do Google Maps recusada (confira a chave e se a Routes API est\xE1 ativada): ${detalhe}`);
+    throw new Error(`Falha ao calcular a rota no Google: ${detalhe}`);
+  }
+  const rota = dados.routes?.[0];
+  if (!rota?.polyline?.encodedPolyline) throw new Error("O Google n\xE3o encontrou rota de carro entre esses pontos.");
+  return { pontos, trajeto: decodificarPolyline(rota.polyline.encodedPolyline), distanciaKm: Math.round((rota.distanceMeters ?? 0) / 1e3) };
+}
+
+// src/lib/pedagios.js
+var RUMO = { n: 0, ne: 45, e: 90, se: 135, s: 180, so: 225, o: 270, no: 315 };
+var M_POR_GRAU_LAT = 110540;
+var M_POR_GRAU_LNG = 111320;
+function diferencaDeRumo(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+function plano(lat, lng, lat0, lng0) {
+  return [(lng - lng0) * M_POR_GRAU_LNG * Math.cos(lat0 * Math.PI / 180), (lat - lat0) * M_POR_GRAU_LAT];
+}
+function comprimentoM([lat1, lng1], [lat2, lng2]) {
+  const [x, y] = plano(lat2, lng2, lat1, lng1);
+  return Math.hypot(x, y);
+}
+function pracasNaRota(trajeto, pracas, { raioM = 500, toleranciaGraus = 60 } = {}) {
+  if (trajeto.length < 2) return [];
+  const inicioM = [0];
+  for (let i = 1; i < trajeto.length; i++) inicioM.push(inicioM[i - 1] + comprimentoM(trajeto[i - 1], trajeto[i]));
+  const folgaGraus = raioM / M_POR_GRAU_LAT * 1.5;
+  const n = trajeto.length - 1;
+  const caixa = new Float64Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const [aLat, aLng] = trajeto[i];
+    const [bLat, bLng] = trajeto[i + 1];
+    caixa[i * 4] = Math.min(aLat, bLat) - folgaGraus;
+    caixa[i * 4 + 1] = Math.max(aLat, bLat) + folgaGraus;
+    caixa[i * 4 + 2] = Math.min(aLng, bLng) - folgaGraus;
+    caixa[i * 4 + 3] = Math.max(aLng, bLng) + folgaGraus;
+  }
+  const achadas = [];
+  for (const praca of pracas) {
+    const { latitude: lat, longitude: lng } = praca;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    let melhor = null;
+    for (let i = 0; i < n; i++) {
+      const k = i * 4;
+      if (lat < caixa[k] || lat > caixa[k + 1] || lng < caixa[k + 2] || lng > caixa[k + 3]) continue;
+      const [aLat, aLng] = trajeto[i];
+      const [bLat, bLng] = trajeto[i + 1];
+      const [ax, ay] = plano(aLat, aLng, lat, lng);
+      const [bx, by] = plano(bLat, bLng, lat, lng);
+      const dx = bx - ax, dy = by - ay;
+      const tam2 = dx * dx + dy * dy;
+      if (tam2 === 0) continue;
+      const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / tam2));
+      const distanciaM = Math.hypot(ax + t * dx, ay + t * dy);
+      if (distanciaM > raioM || melhor && distanciaM >= melhor.distanciaM) continue;
+      const rumo = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+      melhor = { distanciaM, rumo, posicaoM: inicioM[i] + t * Math.sqrt(tam2) };
+    }
+    if (!melhor) continue;
+    const rumoPraca = RUMO[String(praca.direcao ?? "").trim().toLowerCase()];
+    const semSentido = rumoPraca === void 0;
+    if (!semSentido && diferencaDeRumo(rumoPraca, melhor.rumo) > toleranciaGraus) continue;
+    achadas.push({ ...praca, distanciaM: melhor.distanciaM, kmNaRota: melhor.posicaoM / 1e3, ...semSentido ? { semSentido } : {} });
+  }
+  return achadas.sort((a, b) => a.kmNaRota - b.kmNaRota);
+}
+function ehSemParar(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && u.hostname === "portal.sempararempresas.com.br";
+  } catch {
+    return false;
+  }
+}
+
 // src/sidepanel/main.js
 var DOCUMENTO = { motorista: "cpf", proprietario: "prop_cpf_cnpj", veiculo: "veic_placa" };
 var $ = (id) => document.getElementById(id);
@@ -31712,18 +31896,20 @@ function recomecar() {
   listarArquivos();
   mensagem("");
   $("btn-ler").textContent = modo === "cte" ? "Ler nota" : "Ler documentos";
-  mostrar("entrada");
+  $("resultado-pedagios").hidden = true;
+  mostrar(modo === "pedagios" ? "pedagios" : "entrada");
 }
 function aplicarModo(novoModo) {
-  modo = novoModo === "cte" ? "cte" : "cadastro";
+  modo = ["cte", "pedagios"].includes(novoModo) ? novoModo : "cadastro";
   for (const botao of document.querySelectorAll("[data-modo]")) {
     const ativo = botao.dataset.modo === modo;
     botao.classList.toggle("ativo", ativo);
     botao.setAttribute("aria-selected", String(ativo));
   }
   const cte = modo === "cte";
-  $("titulo-painel").textContent = cte ? "CT-e manual" : "Cadastro de Motorista";
-  $("subtitulo-painel").textContent = cte ? "Leitura da nota e preenchimento assistido no Sitra" : "Leitura de documentos e preenchimento do Sitra";
+  const pedagios = modo === "pedagios";
+  $("titulo-painel").textContent = pedagios ? "Ped\xE1gios" : cte ? "CT-e manual" : "Cadastro de Motorista";
+  $("subtitulo-painel").textContent = pedagios ? "Rota do motorista (Google Maps) \u2192 pra\xE7as marcadas no Sem Parar" : cte ? "Leitura da nota e preenchimento assistido no Sitra" : "Leitura de documentos e preenchimento do Sitra";
   $("titulo-upload").textContent = cte ? "Solte aqui a nota do CT-e" : "Solte aqui os documentos do motorista";
   $("texto-upload").textContent = cte ? "foto ou PDF \u2014 ou clique para escolher" : "fotos, PDFs ou o .zip da conversa \u2014 ou clique para escolher";
   $("bloco-mensagens").hidden = cte;
@@ -31772,6 +31958,17 @@ $("btn-voltar").addEventListener("click", () => {
 $("link-config").addEventListener("click", (e) => {
   e.preventDefault();
   abrirConfig();
+});
+$("link-config-pedagios").addEventListener("click", (e) => {
+  e.preventDefault();
+  abrirConfig();
+});
+$("btn-pedagios").addEventListener("click", marcarPedagios);
+$("link-maps").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    marcarPedagios();
+  }
 });
 $("cfg-salvar").addEventListener("click", salvarConfigPainel);
 $("cfg-fechar").addEventListener("click", () => {
@@ -31964,6 +32161,91 @@ async function mostrarCruzamento() {
     nota(e.message);
   }
 }
+var STATUS_PEDAGIO = {
+  ok: ["\u2705", ""],
+  ja_estava: ["\u2611\uFE0F", " (j\xE1 estava marcada)"],
+  ambiguo: ["\u26A0\uFE0F", " \u2014 dois marcadores no mesmo ponto: marque \xE0 m\xE3o"],
+  sem_marcador: ["\u26A0\uFE0F", " \u2014 n\xE3o achei no mapa: marque \xE0 m\xE3o"],
+  nao_entrou: ["\u26A0\uFE0F", " \u2014 cliquei, mas n\xE3o entrou na lista: marque \xE0 m\xE3o"]
+};
+async function marcarPedagios() {
+  mensagem("");
+  const caixa = $("resultado-pedagios");
+  const el = (tag, texto, classe) => {
+    const e = document.createElement(tag);
+    if (texto) e.textContent = texto;
+    if (classe) e.className = classe;
+    return e;
+  };
+  const cfg = await lerConfig();
+  if (!cfg.mapsKey) {
+    await abrirConfig("Cole a chave da API do Google Maps (Ped\xE1gios) e clique em Salvar.");
+    $("cfg-mapsKey").focus();
+    return;
+  }
+  const link = $("link-maps").value.trim();
+  if (!link) {
+    mensagem("Cole o link do Google Maps que o motorista mandou.");
+    return;
+  }
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!ehSemParar(tab?.url)) {
+    mensagem("Abra nesta aba o portal Sem Parar Empresas, na tela Rotas \u2192 Cadastrar.");
+    return;
+  }
+  const noPortal = async (func, args = []) => (await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: "MAIN", func, args }))[0]?.result;
+  const est = await noPortal(() => window.__semParar?.estado() ?? null).catch(() => null);
+  if (!est) {
+    mensagem("A extens\xE3o ainda n\xE3o est\xE1 ativa nesta aba: recarregue a p\xE1gina do Sem Parar (F5) e tente de novo.");
+    return;
+  }
+  if (est.tela !== "cadastrar_rota") {
+    mensagem("No portal Sem Parar, abra a tela Rotas \u2192 Cadastrar.");
+    return;
+  }
+  if (!est.pracas || !est.marcadores) {
+    mensagem('N\xE3o encontrei as pra\xE7as do mapa. Recarregue a p\xE1gina do Sem Parar (F5), clique em "Configurar ped\xE1gios" e tente de novo.');
+    return;
+  }
+  const botao = $("btn-pedagios");
+  botao.disabled = true;
+  caixa.hidden = true;
+  try {
+    botao.textContent = "Calculando a rota\u2026";
+    const { pontos, trajeto, distanciaKm } = await buscarTrajeto(link, cfg.mapsKey);
+    const pracas = await noPortal(() => window.__semParar.pracas());
+    const naRota = pracasNaRota(trajeto, pracas ?? []);
+    const topo = el("p", `Rota: ${pontos.map((p) => p.endereco).join(" \u2192 ")}${distanciaKm ? ` (\u2248 ${distanciaKm} km)` : ""}`);
+    if (!naRota.length) {
+      caixa.replaceChildren(topo, el("p", "Nenhuma pra\xE7a de ped\xE1gio do Sem Parar nessa rota.", "nota"));
+      caixa.hidden = false;
+      return;
+    }
+    botao.textContent = `Marcando ${naRota.length} pra\xE7as\u2026`;
+    const lista2 = naRota.map(({ identificadorMapa, nomePraca, latitude, longitude }) => ({ identificadorMapa, nomePraca, latitude, longitude }));
+    const resultado = await noPortal((l) => window.__semParar.marcar(l), [lista2]) ?? [];
+    const semSentido = new Set(naRota.filter((p) => p.semSentido).map((p) => p.identificadorMapa));
+    const ul = el("ul");
+    for (const r of resultado) {
+      const [icone, sufixo] = STATUS_PEDAGIO[r.status] ?? ["\u26A0\uFE0F", ` \u2014 ${r.status}`];
+      const aviso = semSentido.has(r.identificadorMapa) ? " \u2014 sem sentido no cadastro, confira" : "";
+      ul.append(el("li", `${icone} ${r.identificadorMapa} - ${r.nomePraca}${sufixo}${aviso}`, icone === "\u26A0\uFE0F" || aviso ? "alerta" : ""));
+    }
+    const marcadas = resultado.filter((r) => r.status === "ok" || r.status === "ja_estava").length;
+    caixa.replaceChildren(
+      topo,
+      el("p", `${marcadas} de ${naRota.length} pra\xE7as marcadas, na ordem do caminho.`),
+      ul,
+      el("p", 'Confira as pra\xE7as no mapa do portal e clique em "Salvar rota". A extens\xE3o n\xE3o salva.', "nota")
+    );
+    caixa.hidden = false;
+  } catch (e) {
+    mensagem(e.message);
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "Marcar ped\xE1gios no Sem Parar";
+  }
+}
 async function verificarAtualizacao() {
   try {
     const r = await fetch("https://api.github.com/repos/breviistransportes/Sitra_automacao/releases/latest");
@@ -31981,6 +32263,7 @@ atualizarBotaoHistorico();
 async function abrirConfig(aviso = "") {
   const cfg = await lerConfig();
   $("cfg-apiKey").value = cfg.apiKey;
+  $("cfg-mapsKey").value = cfg.mapsKey;
   $("cfg-nacionalidade").value = cfg.padroes.nacionalidade;
   $("cfg-propriedade").value = cfg.padroes.propriedade;
   $("cfg-emailProprietario").value = cfg.padroes.emailProprietario;
@@ -31998,6 +32281,7 @@ async function salvarConfigPainel() {
   }
   await salvarConfig({
     apiKey,
+    mapsKey: $("cfg-mapsKey").value.trim(),
     padroes: {
       nacionalidade: $("cfg-nacionalidade").value.trim().toUpperCase(),
       propriedade: $("cfg-propriedade").value,

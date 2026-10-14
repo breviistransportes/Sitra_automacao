@@ -57,6 +57,23 @@ Cada leitura fica guardada em **Histórico (N)**, na tela inicial, por 30 dias (
 
 O modo CT-e não escolhe o Tipo de Frete, não preenche placas ou responsável e nunca aciona **Cadastrar**.
 
+### Usar o modo Pedágios (Sem Parar)
+
+Para quando a rota do motorista não é a que o roteirizador do Sem Parar sugere.
+
+1. Uma vez só: em **Configurações**, cole a **chave da API do Google Maps** (veja abaixo) e salve.
+2. No portal Sem Parar Empresas, abra **Rotas → Cadastrar**, dê o nome da rota e clique em **Configurar pedágios**.
+3. No painel, selecione **Pedágios**, cole o link do Google Maps que o motorista mandou e clique em **Marcar pedágios no Sem Parar**.
+4. A extensão calcula a rota do link (mesmas paradas), escolhe as praças a até 500 m do caminho — de cada par, só a do
+   sentido da viagem — e clica nelas no mapa, na ordem do caminho. O painel mostra o que entrou e o que precisa ser marcado à mão.
+5. Confira no mapa do portal e clique em **Salvar rota**. A extensão nunca salva.
+
+Se o painel pedir, recarregue a página do Sem Parar (**F5**): a extensão precisa estar ativa antes de o mapa carregar.
+Se o motorista só **arrastou** a linha azul no Maps (sem adicionar parada), esse desvio não vai no link — confira o trecho.
+
+**Chave do Google Maps:** no Google Cloud Console (o mesmo projeto da chave do Gemini serve), ative a **Routes API**,
+crie uma chave em **Credenciais** e restrinja-a à "Routes API". O volume de rotas do dia a dia cabe na cota gratuita.
+
 ## Desenvolvimento
 
 Precisa de [Node.js](https://nodejs.org) 20+: `npm install`, depois:
@@ -87,7 +104,9 @@ Os computadores com a extensão passam a ver o aviso "Nova versão disponível".
 - **Histórico:** guarda no Chrome do computador (não vai para nenhum servidor) os dados conferidos de cada cadastro — CPF, CNH, endereço, placas —, sem as fotos e PDFs, e apaga sozinho o que passou de 30 dias. Em computador compartilhado, use **Apagar tudo** ao terminar.
 - **CRM:** a extensão só tem a chave publicável do CRM (a mesma de qualquer página pública dele); sem login ela não lê nenhuma viagem. Quem pode ver o quê é decidido pelas regras do CRM, pela conta do operador. A senha não fica salva, só a sessão ("Sair do CRM" encerra). Busca só as viagens programadas e só as colunas do cruzamento — nunca valores, margem ou pagamento.
 - **Escopo:** a extensão só injeta no Sitra da empresa (`https://2323.aleff.com.br`) e envia para a página apenas
-  os campos da tela aberta.
+  os campos da tela aberta. No portal Sem Parar (`https://portal.sempararempresas.com.br`) ela só lê a lista de praças
+  que o próprio portal carrega e clica nos marcadores do mapa — não salva rota nem compra vale-pedágio.
+- **Pedágios:** o link do motorista e as paradas dele vão para o Google (Routes API) para calcular o caminho; nenhum dado do Sem Parar sai do navegador.
 - **LGPD:** CNH, CPF, endereço e mensagens dos motoristas são enviados ao Google (Gemini) para leitura. Registre essa
   finalidade, a base legal e o Google como operador no registro de tratamento da empresa e informe os motoristas.
 - **GitHub:** ative a verificação em 2 etapas na conta `breviistransportes` — o aviso de atualização aponta para os
