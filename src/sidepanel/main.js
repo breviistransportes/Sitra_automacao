@@ -10,8 +10,10 @@ import { entrar, sair, renovarSeVencendo, viagensProgramadas, lerSessao, salvarS
 import { cruzarComViagens } from '../lib/cruzamento.js';
 import { lerHistorico, salvarNoHistorico, excluirDoHistorico, apagarHistorico, resumoDoRegistro } from '../lib/historico.js';
 import { montarFormularioCte, lerFormularioCte } from './formulario-cte.js';
-import { versaoMaior, linkAtualizacaoValido } from '../lib/versao.js';
+import { versaoMaior, linkAtualizacaoValido, textoAtualizacao } from '../lib/versao.js';
 import { TELAS, CAMPO_POR_CHAVE, ehSitra, valoresDaTela } from '../lib/campos.js';
+import { buscarTrajeto } from '../lib/rota-maps.js';
+import { pracasNaRota, ehSemParar } from '../lib/pedagios.js';
 
 // Documento que identifica o cadastro em cada tela do Sitra.
 const DOCUMENTO = { motorista: 'cpf', proprietario: 'prop_cpf_cnpj', veiculo: 'veic_placa' };
@@ -234,19 +236,23 @@ function recomecar() {
   listarArquivos();
   mensagem('');
   $('btn-ler').textContent = modo === 'cte' ? 'Ler nota' : 'Ler documentos';
-  mostrar('entrada');
+  $('resultado-pedagios').hidden = true;
+  mostrar(modo === 'pedagios' ? 'pedagios' : 'entrada');
 }
 
 function aplicarModo(novoModo) {
-  modo = novoModo === 'cte' ? 'cte' : 'cadastro';
+  modo = ['cte', 'pedagios'].includes(novoModo) ? novoModo : 'cadastro';
   for (const botao of document.querySelectorAll('[data-modo]')) {
     const ativo = botao.dataset.modo === modo;
     botao.classList.toggle('ativo', ativo);
     botao.setAttribute('aria-selected', String(ativo));
   }
   const cte = modo === 'cte';
-  $('titulo-painel').textContent = cte ? 'CT-e manual' : 'Cadastro de Motorista';
-  $('subtitulo-painel').textContent = cte ? 'Leitura da nota e preenchimento assistido no Sitra' : 'Leitura de documentos e preenchimento do Sitra';
+  const pedagios = modo === 'pedagios';
+  $('titulo-painel').textContent = pedagios ? 'Pedágios' : cte ? 'CT-e manual' : 'Cadastro de Motorista';
+  $('subtitulo-painel').textContent = pedagios
+    ? 'Rota do motorista (Google Maps) → praças marcadas no Sem Parar'
+    : cte ? 'Leitura da nota e preenchimento assistido no Sitra' : 'Leitura de documentos e preenchimento do Sitra';
   $('titulo-upload').textContent = cte ? 'Solte aqui a nota do CT-e' : 'Solte aqui os documentos do motorista';
   $('texto-upload').textContent = cte ? 'foto ou PDF — ou clique para escolher' : 'fotos, PDFs ou o .zip da conversa — ou clique para escolher';
   $('bloco-mensagens').hidden = cte;
@@ -278,6 +284,9 @@ $('btn-recomecar').addEventListener('click', recomecar);
 $('btn-novo').addEventListener('click', recomecar);
 $('btn-voltar').addEventListener('click', () => { mensagem(''); mostrar('conferencia'); });
 $('link-config').addEventListener('click', (e) => { e.preventDefault(); abrirConfig(); });
+$('link-config-pedagios').addEventListener('click', (e) => { e.preventDefault(); abrirConfig(); });
+$('btn-pedagios').addEventListener('click', marcarPedagios);
+$('link-maps').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); marcarPedagios(); } });
 $('cfg-salvar').addEventListener('click', salvarConfigPainel);
 $('cfg-fechar').addEventListener('click', () => { $('config').hidden = true; mensagem(''); });
 $('form-conferencia').addEventListener('input', (e) => e.target.closest('label')?.classList.remove('conferir'));
@@ -456,27 +465,100 @@ async function mostrarCruzamento() {
   }
 }
 
+// Pedágios: link do Maps do motorista → rota no Google → praças da rota → cliques nos marcadores do portal Sem Parar.
+const STATUS_PEDAGIO = {
+  ok: ['✅', ''],
+  ja_estava: ['☑️', ' (já estava marcada)'],
+  ambiguo: ['⚠️', ' — dois marcadores no mesmo ponto: marque à mão'],
+  sem_marcador: ['⚠️', ' — não achei no mapa: marque à mão'],
+  nao_entrou: ['⚠️', ' — cliquei, mas não entrou na lista: marque à mão'],
+};
+
+async function marcarPedagios() {
+  mensagem('');
+  const caixa = $('resultado-pedagios');
+  const el = (tag, texto, classe) => { const e = document.createElement(tag); if (texto) e.textContent = texto; if (classe) e.className = classe; return e; };
+  const cfg = await lerConfig();
+  if (!cfg.mapsKey) { await abrirConfig('Cole a chave da API do Google Maps (Pedágios) e clique em Salvar.'); $('cfg-mapsKey').focus(); return; }
+  const link = $('link-maps').value.trim();
+  if (!link) { mensagem('Cole o link do Google Maps que o motorista mandou.'); return; }
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!ehSemParar(tab?.url)) { mensagem('Abra nesta aba o portal Sem Parar Empresas, na tela Rotas → Cadastrar.'); return; }
+  const noPortal = async (func, args = []) => (await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', func, args }))[0]?.result;
+
+  const est = await noPortal(() => window.__semParar?.estado() ?? null).catch(() => null);
+  if (!est) { mensagem('A extensão ainda não está ativa nesta aba: recarregue a página do Sem Parar (F5) e tente de novo.'); return; }
+  if (est.tela !== 'cadastrar_rota') { mensagem('No portal Sem Parar, abra a tela Rotas → Cadastrar.'); return; }
+  if (!est.pracas || !est.marcadores) {
+    mensagem('Não encontrei as praças do mapa. Recarregue a página do Sem Parar (F5), clique em "Configurar pedágios" e tente de novo.');
+    return;
+  }
+
+  const botao = $('btn-pedagios');
+  botao.disabled = true;
+  caixa.hidden = true;
+  try {
+    botao.textContent = 'Calculando a rota…';
+    const { pontos, trajeto, distanciaKm } = await buscarTrajeto(link, cfg.mapsKey);
+    const pracas = await noPortal(() => window.__semParar.pracas());
+    const naRota = pracasNaRota(trajeto, pracas ?? []);
+    const topo = el('p', `Rota: ${pontos.map(p => p.endereco).join(' → ')}${distanciaKm ? ` (≈ ${distanciaKm} km)` : ''}`);
+    if (!naRota.length) {
+      caixa.replaceChildren(topo, el('p', 'Nenhuma praça de pedágio do Sem Parar nessa rota.', 'nota'));
+      caixa.hidden = false;
+      return;
+    }
+    botao.textContent = `Marcando ${naRota.length} praças…`;
+    const lista = naRota.map(({ identificadorMapa, nomePraca, latitude, longitude }) => ({ identificadorMapa, nomePraca, latitude, longitude }));
+    const resultado = (await noPortal((l) => window.__semParar.marcar(l), [lista])) ?? [];
+    const semSentido = new Set(naRota.filter(p => p.semSentido).map(p => p.identificadorMapa));
+    const ul = el('ul');
+    for (const r of resultado) {
+      const [icone, sufixo] = STATUS_PEDAGIO[r.status] ?? ['⚠️', ` — ${r.status}`];
+      const aviso = semSentido.has(r.identificadorMapa) ? ' — sem sentido no cadastro, confira' : '';
+      ul.append(el('li', `${icone} ${r.identificadorMapa} - ${r.nomePraca}${sufixo}${aviso}`, icone === '⚠️' || aviso ? 'alerta' : ''));
+    }
+    const marcadas = resultado.filter(r => r.status === 'ok' || r.status === 'ja_estava').length;
+    caixa.replaceChildren(
+      topo,
+      el('p', `${marcadas} de ${naRota.length} praças marcadas, na ordem do caminho.`),
+      ul,
+      el('p', 'Confira as praças no mapa do portal e clique em "Salvar rota". A extensão não salva.', 'nota'),
+    );
+    caixa.hidden = false;
+  } catch (e) {
+    mensagem(e.message);
+  } finally {
+    botao.disabled = false;
+    botao.textContent = 'Marcar pedágios no Sem Parar';
+  }
+}
+
 // Aviso de versão nova publicada no GitHub (Releases). Sem internet ou sem release: não mostra nada.
 async function verificarAtualizacao() {
   try {
     const r = await fetch('https://api.github.com/repos/breviistransportes/Sitra_automacao/releases/latest');
     if (!r.ok) return;
     const { tag_name: tag, html_url: url } = await r.json();
-    if (!linkAtualizacaoValido(tag, url) || !versaoMaior(tag, chrome.runtime.getManifest().version)) return;
+    const atual = chrome.runtime.getManifest().version;
+    if (!linkAtualizacaoValido(tag, url) || !versaoMaior(tag, atual)) return;
+    $('texto-atualizacao').textContent = textoAtualizacao(tag, atual);
     $('link-atualizacao').href = url;
-    $('link-atualizacao').textContent = `Nova versão ${tag} disponível — baixar`;
     $('atualizacao').hidden = false;
   } catch {
     // silencioso: o aviso é só uma conveniência
   }
 }
 verificarAtualizacao();
+// O painel pode ficar aberto o dia todo: confere de novo a cada 6 horas.
+setInterval(verificarAtualizacao, 6 * 60 * 60 * 1000);
 atualizarBotaoHistorico();
 
 // Configurações dentro do próprio painel (não depende da página de opções do Chrome).
 async function abrirConfig(aviso = '') {
   const cfg = await lerConfig();
   $('cfg-apiKey').value = cfg.apiKey;
+  $('cfg-mapsKey').value = cfg.mapsKey;
   $('cfg-nacionalidade').value = cfg.padroes.nacionalidade;
   $('cfg-propriedade').value = cfg.padroes.propriedade;
   $('cfg-emailProprietario').value = cfg.padroes.emailProprietario;
@@ -492,6 +574,7 @@ async function salvarConfigPainel() {
   if (!apiKey) { mensagem('Cole a chave da API do Gemini.'); return; }
   await salvarConfig({
     apiKey,
+    mapsKey: $('cfg-mapsKey').value.trim(),
     padroes: {
       nacionalidade: $('cfg-nacionalidade').value.trim().toUpperCase(),
       propriedade: $('cfg-propriedade').value,

@@ -1,0 +1,58 @@
+# Publica a release sozinho quando a versão do manifest muda na main.
+# É a release que faz o painel avisar "Você está na vX — a vY já está disponível".
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: ['extensao/manifest.json']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versão do manifest
+        id: versao
+        run: echo "tag=v$(node -p "require('./extensao/manifest.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Já publicada?
+        id: existe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.versao.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG já existe — nada a fazer."
+            echo "publicar=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.existe.outputs.publicar == 'true'
+        with:
+          node-version: 24
+          cache: npm
+
+      - if: steps.existe.outputs.publicar == 'true'
+        run: npm ci
+
+      - if: steps.existe.outputs.publicar == 'true'
+        run: npm test
+
+      - name: Montar o .zip da extensão
+        if: steps.existe.outputs.publicar == 'true'
+        run: npm run empacotar
+
+      - name: Publicar a release
+        if: steps.existe.outputs.publicar == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.versao.outputs.tag }}
+        run: gh release create "$TAG" cadastro-motorista-sitra.zip --target "$GITHUB_SHA" --title "$TAG" --generate-notes

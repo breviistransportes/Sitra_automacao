@@ -7,6 +7,7 @@ import { lerEntrada } from '../src/lib/entrada.js';
 import { linkAtualizacaoValido } from '../src/lib/versao.js';
 import { montarSchemaCte } from '../src/lib/extrator-cte.js';
 import { CAMPOS_CTE } from '../src/lib/campos-cte.js';
+import { ehSemParar } from '../src/lib/pedagios.js';
 
 const padroes = { propriedade: '3', nacionalidade: 'BRASILEIRA' };
 const bruto = (campos) => ({ campos, documentos_encontrados: [], avisos: [] });
@@ -124,5 +125,15 @@ describe('CT-e — isolamento dos dados', () => {
     expect(Object.keys(montarSchemaCte().properties.campos.properties).every(k => permitidos.has(k))).toBe(true);
     expect(montarSchemaCte().properties.campos.properties).not.toHaveProperty('registro_cnh');
     expect(montarSchemaCte().properties.campos.properties).not.toHaveProperty('veic_placa');
+  });
+});
+
+describe('Pedágios — só o portal Sem Parar Empresas', () => {
+  it('ehSemParar aceita só o portal, em https', () => {
+    expect(ehSemParar('https://portal.sempararempresas.com.br/vp-eletronico/rota/cadastrar')).toBe(true);
+    expect(ehSemParar('http://portal.sempararempresas.com.br/vp-eletronico/rota/cadastrar')).toBe(false);
+    expect(ehSemParar('https://portal.sempararempresas.com.br.evil.com/')).toBe(false);
+    expect(ehSemParar('https://evil.com/portal.sempararempresas.com.br')).toBe(false);
+    expect(ehSemParar(undefined)).toBe(false);
   });
 });

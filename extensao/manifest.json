@@ -1,10 +1,27 @@
 {
   "manifest_version": 3,
   "name": "Automação Sitra",
-  "version": "0.10.0",
-  "description": "Lê documentos com IA e preenche cadastros e a Digitação manual de CT-e no Sitra Web Revolution.",
+  "version": "0.11.0",
+  "description": "Lê documentos com IA e preenche cadastros e a Digitação manual de CT-e no Sitra Web Revolution; marca no Sem Parar os pedágios da rota do motorista.",
   "permissions": ["sidePanel", "storage", "scripting"],
-  "host_permissions": ["https://2323.aleff.com.br/*", "https://generativelanguage.googleapis.com/*", "https://lpnuuwcidpaojzqhrojh.supabase.co/*"],
+  "host_permissions": [
+    "https://2323.aleff.com.br/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://lpnuuwcidpaojzqhrojh.supabase.co/*",
+    "https://portal.sempararempresas.com.br/*",
+    "https://maps.app.goo.gl/*",
+    "https://maps.google.com/*",
+    "https://www.google.com/maps*",
+    "https://routes.googleapis.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://portal.sempararempresas.com.br/*"],
+      "js": ["content/semparar.bundle.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ],
   "background": { "service_worker": "background.js" },
   "side_panel": { "default_path": "sidepanel/index.html" },
   "options_page": "options/options.html",

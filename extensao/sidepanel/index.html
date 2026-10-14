@@ -17,8 +17,13 @@
     <div class="seletor-modo" role="tablist" aria-label="Tipo de automação">
       <button type="button" class="modo ativo" data-modo="cadastro" aria-selected="true">Cadastros</button>
       <button type="button" class="modo" data-modo="cte" aria-selected="false">CT-e manual</button>
+      <button type="button" class="modo" data-modo="pedagios" aria-selected="false">Pedágios</button>
     </div>
-    <p id="atualizacao" hidden><a id="link-atualizacao" target="_blank" rel="noopener"></a></p>
+    <div id="atualizacao" role="alert" hidden>
+      <strong id="texto-atualizacao"></strong>
+      <a id="link-atualizacao" target="_blank" rel="noopener">Baixar a nova versão</a>
+      <small>Extraia o .zip por cima da mesma pasta e, em chrome://extensions, clique em recarregar (↻) na extensão.</small>
+    </div>
     <p id="mensagem" role="status" aria-live="polite" hidden></p>
 
     <section id="config" hidden aria-labelledby="config-titulo">
@@ -27,6 +32,10 @@
         <input id="cfg-apiKey" type="password" autocomplete="off" placeholder="AIza...">
       </label>
       <small class="nota">Use uma chave exclusiva desta extensão, de projeto com cobrança ativada (no plano gratuito o Google pode usar os documentos enviados), restrita à "Generative Language API" e com limite de gasto. Troque a chave se o computador for compartilhado.</small>
+      <label>Chave da API do Google Maps (Pedágios)
+        <input id="cfg-mapsKey" type="password" autocomplete="off" placeholder="AIza...">
+      </label>
+      <small class="nota">Usada só para calcular a rota do link do motorista (Routes API). Restrinja a chave à "Routes API".</small>
       <label>Nacionalidade padrão
         <input id="cfg-nacionalidade">
       </label>
@@ -80,6 +89,19 @@
         <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
         Configurações
       </a>
+    </section>
+
+    <section data-etapa="pedagios" hidden>
+      <ol class="passos">
+        <li>No portal Sem Parar Empresas, abra <strong>Rotas → Cadastrar</strong>, dê o nome da rota e clique em <strong>Configurar pedágios</strong>.</li>
+        <li>Cole aqui o link do Google Maps que o motorista mandou e clique em <strong>Marcar pedágios</strong>.</li>
+        <li>Confira as praças marcadas no portal e clique em <strong>Salvar rota</strong>.</li>
+      </ol>
+      <label class="rotulo-campo" for="link-maps">Link da rota no Google Maps</label>
+      <input id="link-maps" type="url" inputmode="url" autocomplete="off" placeholder="https://maps.app.goo.gl/…">
+      <button id="btn-pedagios">Marcar pedágios no Sem Parar</button>
+      <div id="resultado-pedagios" hidden aria-live="polite"></div>
+      <a href="#" id="link-config-pedagios" class="link-config">Configurações</a>
     </section>
 
     <section data-etapa="historico" hidden>
