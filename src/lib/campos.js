@@ -99,6 +99,8 @@ const VEICULO = [
   { chave: 'veic_certificado', id: 'txtCertificadoPropriedade', rotulo: 'Cert. Registro e Licenciamento', tipo: 'digitos', max: 15, obrigatorio: true, grupo: 'Veículo', dica: 'Número do CRV/CRLV (NÚMERO DO CRV ou número do documento)', ia: true },
   { chave: 'veic_uf_registro', id: 'txtUfRegistro', rotulo: 'Estado Registro', tipo: 'uf', obrigatorio: false, grupo: 'Veículo', dica: 'UF do LOCAL de registro no CRV', ia: true },
   { chave: 'veic_cidade_registro', id: 'txtCidadeRegistro', rotulo: 'Cidade Registro', tipo: 'texto', max: 40, obrigatorio: false, grupo: 'Veículo', dica: 'Cidade do LOCAL de registro no CRV', ia: true },
+  // Só para o CIOT (Webrouter): no Sitra os eixos vêm do Tipo do Veículo.
+  { chave: 'veic_eixos', id: null, rotulo: 'Eixos', tipo: 'digitos', max: 2, obrigatorio: false, grupo: 'Veículo', dica: 'EIXOS no CRV/CRLV (número de eixos)', ia: true },
   { chave: 'veic_venc_licenciamento', id: 'txtVencimentoLicenciamento', rotulo: 'Venc. Licenciamento', tipo: 'data', max: 10, obrigatorio: true, grupo: 'Veículo', dica: 'amanhã' },
   { chave: 'veic_venc_ipva', id: 'txtVencimentoIPVA', rotulo: 'Venc. IPVA', tipo: 'data', max: 10, obrigatorio: true, grupo: 'Veículo', dica: 'amanhã' },
 ].map(c => ({ tela: 'veiculo', ia: false, ...c }));

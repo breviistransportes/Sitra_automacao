@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Automação Sitra",
-  "version": "0.11.0",
-  "description": "Lê documentos com IA e preenche cadastros e a Digitação manual de CT-e no Sitra Web Revolution; marca no Sem Parar os pedágios da rota do motorista.",
+  "version": "0.12.0",
+  "description": "Lê documentos com IA e preenche cadastros e a Digitação manual de CT-e no Sitra Web Revolution; marca no Sem Parar os pedágios da rota do motorista e preenche o CIOT no Webrouter.",
   "permissions": ["sidePanel", "storage", "scripting"],
   "host_permissions": [
     "https://2323.aleff.com.br/*",
@@ -12,7 +12,9 @@
     "https://maps.app.goo.gl/*",
     "https://maps.google.com/*",
     "https://www.google.com/maps*",
-    "https://routes.googleapis.com/*"
+    "https://routes.googleapis.com/*",
+    "https://webrouter.com.br/*",
+    "https://*.webrouter.com.br/*"
   ],
   "content_scripts": [
     {

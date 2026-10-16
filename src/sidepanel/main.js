@@ -14,6 +14,9 @@ import { versaoMaior, linkAtualizacaoValido, textoAtualizacao } from '../lib/ver
 import { TELAS, CAMPO_POR_CHAVE, ehSitra, valoresDaTela } from '../lib/campos.js';
 import { buscarTrajeto } from '../lib/rota-maps.js';
 import { pracasNaRota, ehSemParar } from '../lib/pedagios.js';
+import { montarCiot, ehWebrouter, salvarUltimoCte, lerUltimoCte, viagensDoCadastro } from '../lib/ciot.js';
+import { COLUNAS_CIOT } from '../lib/crm.js';
+import { chamarGeminiAntt, posProcessarAntt } from '../lib/extrator-antt.js';
 
 // Documento que identifica o cadastro em cada tela do Sitra.
 const DOCUMENTO = { motorista: 'cpf', proprietario: 'prop_cpf_cnpj', veiculo: 'veic_placa' };
@@ -96,6 +99,8 @@ async function lerDocumentos() {
       $('form-conferencia').innerHTML = montarFormularioCte(r.valores);
       const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(', ')}`] : [];
       preencherLista($('avisos'), [...docsLidos, ...avisosEntrada, ...r.avisos]);
+      // O CIOT tira destinatário, carga e trajeto da última nota lida.
+      await salvarUltimoCte(lerFormularioCte($('form-conferencia')).valores).catch(() => {});
       confirmarSobrescrita = false;
       mostrar('conferencia');
       return;
@@ -141,17 +146,21 @@ async function executarNoSitra(func, args = []) {
 }
 
 const STATUS = { ok: '✅', sitra: '🔵 veio do Sitra (CEP) —', falhou: '⚠️ não gravou —', vazio: '⚠️ obrigatório vazio —' };
+const STATUS_CIOT = { ...STATUS, vazio: '⚠️ preencha no Webrouter —' };
 
 function mostrarRelatorio(rel, rotuloTela = TELAS[rel.tela]?.rotulo) {
   const sucessoCte = rel.ok && rel.tela === 'cte';
-  $('resultado-titulo').textContent = sucessoCte
+  const icones = rel.tela === 'ciot' ? STATUS_CIOT : STATUS;
+  $('resultado-titulo').textContent = rel.ok && rel.tela === 'ciot'
+    ? 'Pronto! No Webrouter, informe o valor do frete e a forma de pagamento, confira as 4 etapas e só então clique em "Emitir".'
+    : sucessoCte
     ? 'Pronto! Confira a Digitação de CT-e, informe o responsável pelo frete combinado e só então decida se deve cadastrar.'
     : rel.ok
     ? `Pronto! Confira a tela de ${rotuloTela} no Sitra e clique em "Cadastrar".`
     : `Parou: ${rel.erro}`;
   const linhas = [
     ...rel.avisos,
-    ...rel.campos.map(c => `${STATUS[c.status]} ${c.rotulo}${c.status === 'falhou' ? ` (esperado "${c.esperado}", ficou "${c.obtido}")` : ''}`),
+    ...rel.campos.map(c => `${icones[c.status]} ${c.rotulo}${c.status === 'falhou' ? ` (esperado "${c.esperado}", ficou "${c.obtido}")` : ''}${c.motivo ? ` (${c.motivo})` : ''}`),
   ];
   preencherLista($('relatorio'), linhas);
   mostrar('resultado');
@@ -166,6 +175,7 @@ async function preencherSitra() {
     const { valores, invalidos, faltando } = lerFormularioCte($('form-conferencia'));
     if (invalidos.length) { mensagem(`Formato inválido: ${invalidos.join(', ')}`); return; }
     if (faltando.length) { mensagem(`Preencha antes de continuar: ${faltando.join(', ')}`); return; }
+    await salvarUltimoCte(valores).catch(() => {});
     $('btn-preencher').disabled = true;
     $('btn-preencher').textContent = 'Preenchendo…';
     try {
@@ -237,11 +247,15 @@ function recomecar() {
   mensagem('');
   $('btn-ler').textContent = modo === 'cte' ? 'Ler nota' : 'Ler documentos';
   $('resultado-pedagios').hidden = true;
-  mostrar(modo === 'pedagios' ? 'pedagios' : 'entrada');
+  mostrar(modo === 'pedagios' ? 'pedagios' : modo === 'ciot' ? 'ciot' : 'entrada');
+  if (modo === 'ciot') {
+    $('ciot-data-fim').value = '';
+    carregarCiot();
+  }
 }
 
 function aplicarModo(novoModo) {
-  modo = ['cte', 'pedagios'].includes(novoModo) ? novoModo : 'cadastro';
+  modo = ['cte', 'pedagios', 'ciot'].includes(novoModo) ? novoModo : 'cadastro';
   for (const botao of document.querySelectorAll('[data-modo]')) {
     const ativo = botao.dataset.modo === modo;
     botao.classList.toggle('ativo', ativo);
@@ -249,8 +263,11 @@ function aplicarModo(novoModo) {
   }
   const cte = modo === 'cte';
   const pedagios = modo === 'pedagios';
-  $('titulo-painel').textContent = pedagios ? 'Pedágios' : cte ? 'CT-e manual' : 'Cadastro de Motorista';
-  $('subtitulo-painel').textContent = pedagios
+  const ciot = modo === 'ciot';
+  $('titulo-painel').textContent = ciot ? 'CIOT' : pedagios ? 'Pedágios' : cte ? 'CT-e manual' : 'Cadastro de Motorista';
+  $('subtitulo-painel').textContent = ciot
+    ? 'Cadastro + nota do CT-e → Emissor de CIOT do Webrouter'
+    : pedagios
     ? 'Rota do motorista (Google Maps) → praças marcadas no Sem Parar'
     : cte ? 'Leitura da nota e preenchimento assistido no Sitra' : 'Leitura de documentos e preenchimento do Sitra';
   $('titulo-upload').textContent = cte ? 'Solte aqui a nota do CT-e' : 'Solte aqui os documentos do motorista';
@@ -260,7 +277,7 @@ function aplicarModo(novoModo) {
     ? 'No Sitra, abra Digitação de CT-e e escolha o Tipo de Frete antes de preencher.'
     : 'Ordem no Sitra: Proprietário → Veículo (um cadastro por placa: cavalo e carreta) → Motorista. Abra a tela e clique em "Preencher".';
   $('btn-preencher').textContent = cte ? 'Preencher CT-e' : 'Preencher no Sitra';
-  $('btn-novo').textContent = cte ? 'Próximo CT-e' : 'Próximo motorista';
+  $('btn-novo').textContent = ciot ? 'Próximo CIOT' : cte ? 'Próximo CT-e' : 'Próximo motorista';
   recomecar();
 }
 
@@ -282,7 +299,7 @@ $('mensagens').addEventListener('input', atualizarBotaoLer);
 $('btn-preencher').addEventListener('click', (e) => { e.preventDefault(); preencherSitra(); });
 $('btn-recomecar').addEventListener('click', recomecar);
 $('btn-novo').addEventListener('click', recomecar);
-$('btn-voltar').addEventListener('click', () => { mensagem(''); mostrar('conferencia'); });
+$('btn-voltar').addEventListener('click', () => { mensagem(''); mostrar(modo === 'ciot' ? 'ciot' : 'conferencia'); });
 $('link-config').addEventListener('click', (e) => { e.preventDefault(); abrirConfig(); });
 $('link-config-pedagios').addEventListener('click', (e) => { e.preventDefault(); abrirConfig(); });
 $('btn-pedagios').addEventListener('click', marcarPedagios);
@@ -296,6 +313,11 @@ $('form-conferencia').addEventListener('click', (e) => {
   if (aba) mostrarAba($('form-conferencia'), aba.dataset.tela);
 });
 for (const botao of document.querySelectorAll('[data-modo]')) botao.addEventListener('click', () => aplicarModo(botao.dataset.modo));
+for (const botao of document.querySelectorAll('[data-ciot-tipo], [data-ciot-contratante]')) botao.addEventListener('click', () => escolherCiot(botao));
+$('btn-ciot').addEventListener('click', preencherCiot);
+$('ciot-cadastro').addEventListener('change', () => { mostrarContratadoCiot(); escolherViagemDoCadastro(); });
+$('ciot-viagem').addEventListener('change', mostrarViagemCiot);
+$('ciot-antt-arquivo').addEventListener('change', (e) => { const [a] = e.target.files; e.target.value = ''; if (a) lerCartaoAntt(a); });
 
 // Histórico: falhar ao guardar não pode atrapalhar a leitura nem o preenchimento.
 async function guardarNoHistorico(dados) {
@@ -531,6 +553,183 @@ async function marcarPedagios() {
   } finally {
     botao.disabled = false;
     botao.textContent = 'Marcar pedágios no Sem Parar';
+  }
+}
+
+// CIOT: cadastro do histórico + última nota do CT-e → Emissor de CIOT do Webrouter. Nunca emite.
+const ORIGENS_WEBROUTER = ['https://webrouter.com.br/*', 'https://*.webrouter.com.br/*'];
+const escolhasCiot = { tipo: '', contratante: '' };
+let cadastrosCiot = [];
+let notaCiot = null;
+let viagensCiot = [];
+
+function escolherCiot(botao) {
+  const grupo = botao.dataset.ciotTipo ? 'tipo' : 'contratante';
+  escolhasCiot[grupo] = botao.dataset.ciotTipo ?? botao.dataset.ciotContratante;
+  const seletor = grupo === 'tipo' ? '[data-ciot-tipo]' : '[data-ciot-contratante]';
+  for (const b of document.querySelectorAll(seletor)) {
+    const ativo = b === botao;
+    b.classList.toggle('ativo', ativo);
+    b.setAttribute('aria-checked', String(ativo));
+  }
+}
+
+async function carregarCiot() {
+  const el = (tag, texto, classe) => { const e = document.createElement(tag); if (texto) e.textContent = texto; if (classe) e.className = classe; return e; };
+  cadastrosCiot = await lerHistorico().catch(() => []);
+  const sel = $('ciot-cadastro');
+  sel.replaceChildren(...(cadastrosCiot.length
+    ? cadastrosCiot.map((r, i) => {
+      const { nome, placas, quando } = resumoDoRegistro(r);
+      const o = el('option', [nome, placas.join(' + '), quando].filter(Boolean).join(' · '));
+      o.value = String(i);
+      return o;
+    })
+    : [el('option', 'Nenhum cadastro no histórico — leia os documentos no modo Cadastros')]));
+  sel.disabled = !cadastrosCiot.length;
+  mostrarContratadoCiot();
+  notaCiot = await lerUltimoCte().catch(() => null);
+  const n = notaCiot?.valores ?? {};
+  const linha = (rotulo, valor) => el('p', `${rotulo}: ${valor || '—'}`, valor ? '' : 'alerta');
+  $('ciot-nota').replaceChildren(...(notaCiot
+    ? [
+      el('p', 'Nota do CT-e (última lida)', ''),
+      linha('Destinatário', [n.destinatario_nome, n.destinatario_cnpj].filter(Boolean).join(' · ')),
+      linha('NCM', n.ncm),
+      linha('Peso', n.peso_bruto),
+      linha('Origem', [n.origem_cidade, n.origem_uf].filter(Boolean).join(' - ')),
+      linha('Destino', [n.destino_cidade, n.destino_uf].filter(Boolean).join(' - ')),
+    ]
+    : [el('p', 'Nenhuma nota lida nos últimos 3 dias: leia a nota no modo CT-e manual antes.', 'alerta')]));
+  await carregarViagensCiot();
+}
+
+// Viagens programadas do CRM: o que faltar no cadastro, na nota e no painel sai da viagem escolhida aqui.
+async function carregarViagensCiot() {
+  const sel = $('ciot-viagem');
+  const opcao = (texto, valor) => { const o = document.createElement('option'); o.textContent = texto; o.value = valor; return o; };
+  viagensCiot = [];
+  sel.replaceChildren(opcao('Consultando o CRM…', ''));
+  sel.disabled = true;
+  $('ciot-viagem-info').textContent = '';
+  let aviso = '';
+  try {
+    const sessao = await sessaoDoCrm();
+    if (!sessao) aviso = 'Entre no CRM nas Configurações para completar o CIOT com a viagem programada.';
+    else viagensCiot = await viagensProgramadas(sessao, { colunas: COLUNAS_CIOT });
+  } catch (e) {
+    aviso = e.message;
+  }
+  if (modo !== 'ciot') return;
+  const dataBr = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso ?? '') ? iso.slice(0, 10).split('-').reverse().join('/') : '');
+  sel.replaceChildren(
+    opcao(viagensCiot.length ? 'Não usar o CRM' : aviso ? 'CRM indisponível' : 'Nenhuma viagem programada no CRM', ''),
+    ...viagensCiot.map((t, i) => opcao([t.cliente_nome, [t.origem, t.destino].filter(Boolean).join(' → '), t.placa, dataBr(t.data_coleta) || dataBr(t.data_viagem)]
+      .filter(Boolean).join(' · ') || 'Viagem programada', String(i))),
+  );
+  sel.disabled = !viagensCiot.length;
+  if (aviso) { $('ciot-viagem-info').textContent = aviso; return; }
+  escolherViagemDoCadastro();
+}
+
+// Ao trocar de cadastro, escolhe a viagem do mesmo CPF (ou placa); sem nenhuma, não usa o CRM.
+function escolherViagemDoCadastro() {
+  if (!viagensCiot.length) return;
+  const registro = cadastrosCiot[Number($('ciot-cadastro').value)] ?? null;
+  const [achada] = viagensDoCadastro(registro, viagensCiot);
+  $('ciot-viagem').value = achada ? String(viagensCiot.indexOf(achada)) : '';
+  mostrarViagemCiot();
+}
+
+function viagemCiotEscolhida() {
+  const valor = $('ciot-viagem').value;
+  return valor === '' ? null : viagensCiot[Number(valor)] ?? null;
+}
+
+function mostrarViagemCiot() {
+  const t = viagemCiotEscolhida();
+  $('ciot-viagem-info').textContent = !viagensCiot.length ? $('ciot-viagem-info').textContent
+    : t ? 'O que faltar no cadastro, na nota e no contratado sai desta viagem (motorista, placas, peso, origem, destino, previsão de entrega e proprietário).'
+    : 'Nenhuma viagem do CRM com o CPF ou as placas deste cadastro: escolha uma, se for o caso.';
+}
+
+// Contratado = CPF/CNPJ e RNTRC do cartão da ANTT: vêm do cadastro escolhido, da leitura do cartão ou digitados.
+function mostrarContratadoCiot() {
+  const r = cadastrosCiot[Number($('ciot-cadastro').value)];
+  const v = r?.valores ?? {};
+  $('ciot-contratado-doc').value = v.prop_cpf_cnpj?.valor ?? '';
+  $('ciot-contratado-rntrc').value = v.prop_rntrc?.valor ?? '';
+  $('ciot-contratado-origem').textContent = r
+    ? (v.prop_rntrc?.valor ? 'Do cadastro do motorista. Confira com o cartão da ANTT.' : 'O cadastro não tem RNTRC (cartão da ANTT não lido): leia o cartão ou digite.')
+    : 'Sem cadastro no Histórico: leia o cartão da ANTT, digite ou deixe em branco para usar o proprietário da viagem do CRM.';
+}
+
+async function lerCartaoAntt(arquivo) {
+  mensagem('');
+  const cfg = await lerConfig();
+  if (!cfg.apiKey) { await abrirConfig('Cole a chave da API do Gemini e clique em Salvar.'); return; }
+  $('ciot-contratado-origem').textContent = 'Lendo o cartão da ANTT…';
+  try {
+    const entrada = await lerEntrada([arquivo]);
+    const docs = await prepararDocumentos(entrada.itens, { redimensionar: redimensionarImagem, lerTextoPdf: textoDoPdf });
+    if (!temConteudo(docs, '')) throw new Error('Arquivo não suportado: use foto (JPG/PNG) ou PDF do cartão da ANTT.');
+    const r = posProcessarAntt(await chamarGeminiAntt(cfg.apiKey, docs));
+    if (r.cpf_cnpj) $('ciot-contratado-doc').value = r.cpf_cnpj;
+    if (r.rntrc) $('ciot-contratado-rntrc').value = r.rntrc;
+    $('ciot-contratado-origem').textContent = ['Lido do cartão da ANTT.', ...r.avisos].join(' ');
+  } catch (e) {
+    $('ciot-contratado-origem').textContent = '';
+    mensagem(e.message);
+  }
+}
+
+async function preencherCiot() {
+  mensagem('');
+  // Primeira coisa do clique (o Chrome só pergunta durante o gesto do usuário): com o "Acesso ao site" da extensão
+  // em "sites específicos"/"ao clicar", o Webrouter não vem liberado e a aba fica invisível. Já liberado, não pergunta.
+  const liberado = await chrome.permissions.request({ origins: ORIGENS_WEBROUTER }).catch(() => false);
+  if (!liberado) {
+    mensagem('O Chrome não liberou o acesso ao Webrouter. Clique em "Preencher" de novo e escolha "Permitir" — ou, em chrome://extensions → Detalhes da extensão → Acesso ao site, inclua webrouter.com.br.');
+    return;
+  }
+  const registro = cadastrosCiot[Number($('ciot-cadastro').value)] ?? null;
+  const { dados, faltando, avisos } = montarCiot({
+    registro,
+    cte: notaCiot?.valores ?? null,
+    viagem: viagemCiotEscolhida(),
+    escolhas: {
+      ...escolhasCiot,
+      data_fim: $('ciot-data-fim').value,
+      contratado: { cpf_cnpj: $('ciot-contratado-doc').value, rntrc: $('ciot-contratado-rntrc').value },
+    },
+  });
+  if (faltando.length) { mensagem(`Falta: ${faltando.join(', ')}`); return; }
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!ehWebrouter(tab?.url)) {
+    // Sem permissão para o site, o Chrome não mostra o endereço da aba.
+    let visto = 'endereço não visível para a extensão';
+    try { visto = new URL(tab.url).host; } catch { /* sem url */ }
+    mensagem(`Abra nesta aba o Webrouter, em Emissor de CIOT → Novo CIOT (aba atual: ${visto}).`);
+    return;
+  }
+  const naAba = async (func, args = []) => {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', files: ['content/ciot.bundle.js'] });
+    return (await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', func, args }))[0]?.result;
+  };
+  const botao = $('btn-ciot');
+  botao.disabled = true;
+  botao.textContent = 'Preenchendo…';
+  try {
+    const est = await naAba(() => window.__ciotWebrouter.estado());
+    if (!est?.tela) { mensagem('No Webrouter, abra o Emissor de CIOT e clique em "Novo CIOT".'); return; }
+    const rel = await naAba((d) => window.__ciotWebrouter.preencher(d), [dados]);
+    rel.avisos = [...avisos, ...(rel.avisos ?? [])];
+    mostrarRelatorio(rel);
+  } catch (e) {
+    mensagem(`Falha ao preencher: ${e.message}`);
+  } finally {
+    botao.disabled = false;
+    botao.textContent = 'Preencher CIOT no Webrouter';
   }
 }
 

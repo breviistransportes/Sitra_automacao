@@ -11,6 +11,7 @@ Um terceiro documento, inclusive o da transportadora, vai apenas em outros_cnpjs
 chave_acesso é o número do campo CHAVE DE ACESSO, com 44 dígitos (ignore espaços); nunca use o protocolo nem o código de barras no lugar dela.
 protocolo_autorizacao é o número do campo PROTOCOLO DE AUTORIZAÇÃO DE USO.
 cfops contém todos os CFOPs na ordem em que aparecem; para cada CFOP ilegível, use "?". Datas em DD/MM/AAAA.
+destinatario_nome é o nome/razão social do destinatário. origem_cidade/origem_uf são o município e a UF do remetente (emitente); destino_cidade/destino_uf, o município e a UF do destinatário. ncm é o código NCM/SH do primeiro produto.
 Separe peso_bruto de peso_liquido. Campos ausentes usam valor vazio e certeza conferir.`;
 
 const campo = { type: 'object', properties: { valor: { type: 'string' }, certeza: { type: 'string', enum: ['alta', 'conferir'] }, fonte: { type: 'string' } }, required: ['valor', 'certeza', 'fonte'], additionalProperties: false };

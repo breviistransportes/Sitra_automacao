@@ -74,6 +74,26 @@ Se o motorista só **arrastou** a linha azul no Maps (sem adicionar parada), ess
 **Chave do Google Maps:** no Google Cloud Console (o mesmo projeto da chave do Gemini serve), ative a **Routes API**,
 crie uma chave em **Credenciais** e restrinja-a à "Routes API". O volume de rotas do dia a dia cabe na cota gratuita.
 
+### Usar o modo CIOT (Webrouter)
+
+O CIOT sai do **cadastro do motorista** (Histórico) e da **última nota lida no modo CT-e manual** (até 3 dias).
+
+1. Leia a nota no modo **CT-e manual**. Além do CT-e, ela traz o nome do destinatário, o NCM e as cidades de origem e destino.
+2. No Webrouter, abra **Emissor de CIOT → Novo CIOT** nesta aba.
+3. No painel, selecione **CIOT** e escolha **Lotação** ou **Fracionada**, a contratante (**Breviis I** = CNPJ final 32,
+   **Breviis II** = final 72), o cadastro do motorista e a **data de fim**. Confira o **contratado**: CPF/CNPJ e RNTRC
+   do cartão da ANTT. Eles vêm do cadastro; sem cadastro, use **Ler cartão da ANTT** (foto ou PDF) ou digite.
+4. Clique em **Preencher CIOT no Webrouter**. A extensão preenche as 4 etapas:
+   - data de início (hoje) e data de fim;
+   - contratante (a Breviis da lista do Webrouter pelo final do CNPJ, sem abrir a janela "Procurar contratante";
+     na fracionada, também o Contratante 1);
+   - contratado = transportador do **cartão da ANTT** (CPF/CNPJ, nome e RNTRC) e motorista;
+   - destinatário, NCM, tipo de carga (sempre **Carga geral**) e peso;
+   - cidades de origem e destino (e calcula a distância), placas e eixos (lidos do CRLV).
+5. O painel mostra o que entrou e o que ficou para preencher à mão. Sem cadastro no Histórico ou sem nota lida, ele não trava:
+   preenche o resto e avisa. Informe o **valor do frete** e a **forma de pagamento**, confira as etapas e só então clique
+   em **Emitir**. A extensão nunca emite.
+
 ## Desenvolvimento
 
 Precisa de [Node.js](https://nodejs.org) 20+: `npm install`, depois:

@@ -220,6 +220,7 @@ export function criarPreenchedor(win, { timeoutMs = 8000, intervaloMs = 100 } = 
     const doCep = ENDERECO[tela] ? [ENDERECO[tela].endereco, ENDERECO[tela].bairro, ENDERECO[tela].uf, ENDERECO[tela].cidade] : [];
     const campos = [];
     for (const c of camposDaTela(tela)) {
+      if (!c.id) continue; // campo que não existe no Sitra (ex.: eixos, só para o CIOT)
       const esperado = valores[c.chave] ?? '';
       const obtido = valorDe(c.chave);
       let status;

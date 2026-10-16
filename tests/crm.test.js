@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CRM, entrar, renovarSeVencendo, viagensProgramadas, sair, ErroCrm, COLUNAS_VIAGEM } from '../src/lib/crm.js';
+import { CRM, entrar, renovarSeVencendo, viagensProgramadas, sair, ErroCrm, COLUNAS_VIAGEM, COLUNAS_CIOT } from '../src/lib/crm.js';
 
 const resposta = (status, corpo) => ({ ok: status < 400, status, json: async () => corpo });
 function fetchFalso(respostas) {
@@ -58,6 +58,14 @@ describe('CRM (Supabase): só leitura, com o login do operador', () => {
     expect(COLUNAS_VIAGEM).not.toMatch(/valor|margem|custo|imposto|pago/);
     expect(chamadas[0].init.headers).toMatchObject({ apikey: CRM.chave, Authorization: 'Bearer A' });
     expect(chamadas[0].init.method ?? 'GET').toBe('GET');
+  });
+
+  it('CIOT pede também peso, previsão de entrega e proprietário, nunca valores', async () => {
+    const { fn, chamadas } = fetchFalso([resposta(200, [])]);
+    await viagensProgramadas({ access_token: 'A' }, { fetchFn: fn, colunas: COLUNAS_CIOT });
+    expect(new URL(chamadas[0].url).searchParams.get('select')).toBe(COLUNAS_CIOT);
+    expect(COLUNAS_CIOT).toMatch(/peso_kg.*previsao_entrega.*proprietario_cpf/);
+    expect(COLUNAS_CIOT).not.toMatch(/valor|margem|custo|imposto|pago/);
   });
 
   it('sessão recusada pelo CRM (401) pede para entrar de novo; sem internet, avisa', async () => {
