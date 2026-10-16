@@ -48,6 +48,7 @@ Veículos (lista veiculos, campos veic_*), do CRV/CRLV:
 - MARCA/MODELO/VERSÃO: veic_marca = parte antes da "/", veic_modelo = o restante.
 - veic_certificado = número do CRV/CRLV (número do documento, não o RENAVAM).
 - veic_uf_registro / veic_cidade_registro = LOCAL de registro/emissão.
+- veic_eixos = número do campo EIXOS do CRV/CRLV (só o número).
 - veic_tipo: escolha UMA das opções do Sitra pela ESPÉCIE/TIPO, CARROCERIA e eixos: CAMINHÃO TRATOR → "Cavalo";
   SEMI-REBOQUE/REBOQUE → "Carreta" (ou Carreta6/7/9 conforme os eixos, se claro); caminhão de 3 eixos → "Truck";
   caminhão de 2 eixos → "Toco"; menores (3/4, VUC, HR, VAN, Fiorino…) pelo modelo. Na dúvida, certeza "conferir".

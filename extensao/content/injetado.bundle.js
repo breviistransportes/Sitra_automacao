@@ -113,6 +113,8 @@
     { chave: "veic_certificado", id: "txtCertificadoPropriedade", rotulo: "Cert. Registro e Licenciamento", tipo: "digitos", max: 15, obrigatorio: true, grupo: "Ve\xEDculo", dica: "N\xFAmero do CRV/CRLV (N\xDAMERO DO CRV ou n\xFAmero do documento)", ia: true },
     { chave: "veic_uf_registro", id: "txtUfRegistro", rotulo: "Estado Registro", tipo: "uf", obrigatorio: false, grupo: "Ve\xEDculo", dica: "UF do LOCAL de registro no CRV", ia: true },
     { chave: "veic_cidade_registro", id: "txtCidadeRegistro", rotulo: "Cidade Registro", tipo: "texto", max: 40, obrigatorio: false, grupo: "Ve\xEDculo", dica: "Cidade do LOCAL de registro no CRV", ia: true },
+    // Só para o CIOT (Webrouter): no Sitra os eixos vêm do Tipo do Veículo.
+    { chave: "veic_eixos", id: null, rotulo: "Eixos", tipo: "digitos", max: 2, obrigatorio: false, grupo: "Ve\xEDculo", dica: "EIXOS no CRV/CRLV (n\xFAmero de eixos)", ia: true },
     { chave: "veic_venc_licenciamento", id: "txtVencimentoLicenciamento", rotulo: "Venc. Licenciamento", tipo: "data", max: 10, obrigatorio: true, grupo: "Ve\xEDculo", dica: "amanh\xE3" },
     { chave: "veic_venc_ipva", id: "txtVencimentoIPVA", rotulo: "Venc. IPVA", tipo: "data", max: 10, obrigatorio: true, grupo: "Ve\xEDculo", dica: "amanh\xE3" }
   ].map((c) => ({ tela: "veiculo", ia: false, ...c }));
@@ -339,6 +341,7 @@
       const doCep = ENDERECO[tela] ? [ENDERECO[tela].endereco, ENDERECO[tela].bairro, ENDERECO[tela].uf, ENDERECO[tela].cidade] : [];
       const campos = [];
       for (const c of camposDaTela(tela)) {
+        if (!c.id) continue;
         const esperado = valores[c.chave] ?? "";
         const obtido = valorDe(c.chave);
         let status;

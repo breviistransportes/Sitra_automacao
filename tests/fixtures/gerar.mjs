@@ -15,7 +15,7 @@ const MODAIS = ['ModalErro', 'ModalAsk'];
 
 for (const [tela, { real, saida, extras }] of Object.entries(PAGINAS)) {
   const doc = new JSDOM(readFileSync(real, 'utf8')).window.document;
-  const ids = [...new Set([...camposDaTela(tela).map(c => c.id), ...extras])];
+  const ids = [...new Set([...camposDaTela(tela).map(c => c.id).filter(Boolean), ...extras])];
   const linhas = ids.map(id => {
     const el = doc.getElementById(id);
     if (!el) throw new Error(`${tela}: #${id} não existe na página salva`);
@@ -67,4 +67,27 @@ if (realCte) {
   }
   writeFileSync('tests/fixtures/cte.html', `<!doctype html>\n<!-- GERADO por tests/fixtures/gerar.mjs a partir de ${realCte} — não editar à mão -->\n<html><body>\n${linhas.join('\n')}\n</body></html>\n`);
   console.log(`tests/fixtures/cte.html: ${linhas.length} elementos raiz`);
+}
+
+// Emissor de CIOT do Webrouter (Vue/Quasar): uma página salva por etapa. Copia o formulário real (topo com tipo de
+// operação e datas + etapa aberta) e, se houver, a janela aberta (q-dialog), sem scripts nem imagens.
+const PAGINAS_CIOT = {
+  'webrouter-contratante.html': 'Webrouter _ Cálculo de rotas com pedágio, combustível, frete e APIs..html',
+  'webrouter-procurar-contratante.html': 'procurar contratante.html',
+  'webrouter-fracionada.html': 'carga fracionada.html',
+  'webrouter-destinatario.html': 'destino.html',
+  'webrouter-viagens.html': 'viagens again.html',
+  'webrouter-pagamento.html': 'valor frete e pagamento.html',
+};
+for (const [saida, real] of Object.entries(PAGINAS_CIOT)) {
+  if (!existsSync(real)) { console.log(`(sem ${real} — ${saida} não foi gerada)`); continue; }
+  const doc = new JSDOM(readFileSync(real, 'utf8')).window.document;
+  let raiz = [...doc.querySelectorAll('.emissao-ciot-form-campos')].at(-1); // o último é o da etapa aberta (o primeiro é o topo)
+  if (!raiz) throw new Error(`${real}: .emissao-ciot-form-campos não existe`);
+  while (raiz.parentElement && !/Tipo de operação/.test(raiz.textContent)) raiz = raiz.parentElement;
+  const partes = [raiz, ...doc.querySelectorAll('.q-dialog')];
+  for (const p of partes) p.querySelectorAll('script, svg, img, iframe').forEach(e => e.remove());
+  const html = partes.map(p => p.outerHTML.replace(/\s+/g, ' ')).join('\n');
+  writeFileSync(`tests/fixtures/${saida}`, `<!doctype html>\n<!-- GERADO por tests/fixtures/gerar.mjs a partir de ${real} — não editar à mão -->\n<html><body>\n${html}\n</body></html>\n`);
+  console.log(`tests/fixtures/${saida}: ${html.length} caracteres`);
 }

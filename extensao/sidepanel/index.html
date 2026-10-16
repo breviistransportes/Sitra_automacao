@@ -18,6 +18,7 @@
       <button type="button" class="modo ativo" data-modo="cadastro" aria-selected="true">Cadastros</button>
       <button type="button" class="modo" data-modo="cte" aria-selected="false">CT-e manual</button>
       <button type="button" class="modo" data-modo="pedagios" aria-selected="false">Pedágios</button>
+      <button type="button" class="modo" data-modo="ciot" aria-selected="false">CIOT</button>
     </div>
     <div id="atualizacao" role="alert" hidden>
       <strong id="texto-atualizacao"></strong>
@@ -102,6 +103,43 @@
       <button id="btn-pedagios">Marcar pedágios no Sem Parar</button>
       <div id="resultado-pedagios" hidden aria-live="polite"></div>
       <a href="#" id="link-config-pedagios" class="link-config">Configurações</a>
+    </section>
+
+    <section data-etapa="ciot" hidden>
+      <ol class="passos">
+        <li>Leia antes a nota no modo <strong>CT-e manual</strong> (destinatário, NCM, peso, origem e destino saem dela).</li>
+        <li>No Webrouter, abra <strong>Emissor de CIOT → Novo CIOT</strong> nesta aba.</li>
+        <li>Escolha abaixo e clique em <strong>Preencher CIOT</strong>. No Webrouter, informe o <strong>valor do frete</strong> e a forma de pagamento, confira as 4 etapas e só então clique em <strong>Emitir</strong>.</li>
+      </ol>
+      <span class="rotulo-campo">Tipo de operação</span>
+      <div class="seletor-modo escolha" role="radiogroup" aria-label="Tipo de operação">
+        <button type="button" class="modo" data-ciot-tipo="lotacao" aria-checked="false" role="radio">Lotação</button>
+        <button type="button" class="modo" data-ciot-tipo="fracionada" aria-checked="false" role="radio">Fracionada</button>
+      </div>
+      <span class="rotulo-campo">Contratante</span>
+      <div class="seletor-modo escolha" role="radiogroup" aria-label="Contratante">
+        <button type="button" class="modo" data-ciot-contratante="breviis1" aria-checked="false" role="radio">Breviis I (…32)</button>
+        <button type="button" class="modo" data-ciot-contratante="breviis2" aria-checked="false" role="radio">Breviis II (…72)</button>
+      </div>
+      <label class="rotulo-campo" for="ciot-cadastro">Cadastro do motorista</label>
+      <select id="ciot-cadastro"></select>
+      <label class="rotulo-campo" for="ciot-viagem">Viagem programada no CRM</label>
+      <select id="ciot-viagem"></select>
+      <small id="ciot-viagem-info" class="nota"></small>
+      <fieldset class="ciot-contratado">
+        <legend>Contratado (cartão da ANTT)</legend>
+        <label class="rotulo-campo" for="ciot-contratado-doc">CPF/CNPJ</label>
+        <input id="ciot-contratado-doc" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00">
+        <label class="rotulo-campo" for="ciot-contratado-rntrc">RNTRC</label>
+        <input id="ciot-contratado-rntrc" inputmode="numeric" autocomplete="off" placeholder="8 ou 9 dígitos">
+        <label class="secundario botao-arquivo" for="ciot-antt-arquivo">Ler cartão da ANTT (foto ou PDF)</label>
+        <input id="ciot-antt-arquivo" type="file" accept=".jpg,.jpeg,.png,.pdf" hidden>
+        <small id="ciot-contratado-origem" class="nota"></small>
+      </fieldset>
+      <div id="ciot-nota" class="ciot-resumo"></div>
+      <label class="rotulo-campo" for="ciot-data-fim">Data de fim da viagem</label>
+      <input id="ciot-data-fim" type="date">
+      <button id="btn-ciot">Preencher CIOT no Webrouter</button>
     </section>
 
     <section data-etapa="historico" hidden>

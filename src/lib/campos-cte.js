@@ -1,4 +1,4 @@
-import { formatarCpf, formatarCpfCnpj, formatarData, somenteDigitos, textoSeguro } from './normalizar.js';
+import { formatarCpf, formatarCpfCnpj, formatarData, formatarUf, somenteDigitos, textoSeguro } from './normalizar.js';
 
 export const TOMADORES = [['remetente', 'Remetente'], ['destinatario', 'Destinatário'], ['expedidor', 'Expedidor'], ['recebedor', 'Recebedor']];
 
@@ -20,6 +20,13 @@ export const CAMPOS_CTE = [
   { chave: 'peso_liquido', id: null, rotulo: 'Peso líquido', tipo: 'decimal', obrigatorio: false, grupo: 'Nota fiscal', ia: true },
   { chave: 'data_emissao', id: 'txtNotasFiscaisDataEmissao', rotulo: 'Data de emissão', tipo: 'data', obrigatorio: false, grupo: 'Nota fiscal', ia: true },
   { chave: 'motorista_cpf', id: 'txtMotoristaCpf', rotulo: 'CPF do motorista', tipo: 'cpf', obrigatorio: false, grupo: 'Complementos manuais', ia: false },
+  // Só para o CIOT (Webrouter): não vão para a Digitação de CT-e.
+  { chave: 'destinatario_nome', id: null, rotulo: 'Nome do destinatário', tipo: 'texto', obrigatorio: false, grupo: 'Para o CIOT', ia: true },
+  { chave: 'origem_cidade', id: null, rotulo: 'Cidade de origem (remetente)', tipo: 'texto', obrigatorio: false, grupo: 'Para o CIOT', ia: true },
+  { chave: 'origem_uf', id: null, rotulo: 'UF de origem', tipo: 'uf', obrigatorio: false, grupo: 'Para o CIOT', ia: true },
+  { chave: 'destino_cidade', id: null, rotulo: 'Cidade de destino (destinatário)', tipo: 'texto', obrigatorio: false, grupo: 'Para o CIOT', ia: true },
+  { chave: 'destino_uf', id: null, rotulo: 'UF de destino', tipo: 'uf', obrigatorio: false, grupo: 'Para o CIOT', ia: true },
+  { chave: 'ncm', id: null, rotulo: 'NCM (4 primeiros dígitos)', tipo: 'ncm', obrigatorio: false, grupo: 'Para o CIOT', ia: true },
   { chave: 'especie', id: 'txtMercadoriasTransportadasEspecie', rotulo: 'Espécie de embalagem', tipo: 'texto', obrigatorio: false, grupo: 'Detalhes', ia: false, fixo: 'VOL' },
 ];
 
@@ -54,6 +61,8 @@ export function normalizarCampoCte(campo, valor) {
   if (campo.tipo === 'data') return formatarData(valor);
   if (campo.tipo === 'digitos') return somenteDigitos(valor);
   if (campo.tipo === 'chave') { const d = somenteDigitos(valor); return d.length === 44 ? d : ''; }
+  if (campo.tipo === 'uf') return formatarUf(valor);
+  if (campo.tipo === 'ncm') { const d = somenteDigitos(valor); return d.length >= 4 ? d.slice(0, 4) : ''; }
   if (campo.tipo === 'cfop') { const d = somenteDigitos(valor); return d.length === 4 ? d : ''; }
   if (campo.tipo === 'decimal') return decimal(valor);
   if (campo.tipo === 'tomador') return TOMADORES.some(([v]) => v === valor) ? valor : '';
