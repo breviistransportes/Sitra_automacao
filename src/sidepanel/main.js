@@ -16,6 +16,7 @@ import { buscarTrajeto } from '../lib/rota-maps.js';
 import { pracasNaRota, ehSemParar } from '../lib/pedagios.js';
 import { montarCiot, ehWebrouter, salvarUltimoCte, lerUltimoCte, viagensDoCadastro } from '../lib/ciot.js';
 import { COLUNAS_CIOT } from '../lib/crm.js';
+import { opcoesMotoristaCte } from '../lib/motorista-cte.js';
 import { chamarGeminiAntt, posProcessarAntt } from '../lib/extrator-antt.js';
 
 // Documento que identifica o cadastro em cada tela do Sitra.
@@ -103,6 +104,7 @@ async function lerDocumentos() {
       await salvarUltimoCte(lerFormularioCte($('form-conferencia')).valores).catch(() => {});
       confirmarSobrescrita = false;
       mostrar('conferencia');
+      mostrarMotoristaCte();
       return;
     }
     // Telefone/e-mail só são aceitos se estiverem escritos nas mensagens/conversas enviadas.
@@ -485,6 +487,55 @@ async function mostrarCruzamento() {
     if (e.sair) await salvarSessao(null).catch(() => {});
     nota(e.message);
   }
+}
+
+// CT-e: a nota não traz o motorista. O CPF sai de uma viagem programada do CRM ou de um cadastro do Histórico;
+// sozinho, só quando uma única viagem tem o destino da nota e o campo ainda está vazio.
+async function mostrarMotoristaCte() {
+  const caixa = $('cruzamento');
+  const el = (tag, texto, classe) => { const e = document.createElement(tag); if (texto) e.textContent = texto; if (classe) e.className = classe; return e; };
+  const topo = el('div', '', 'cruzamento-topo');
+  topo.append(el('strong', 'Motorista do CT-e'));
+  const nota = (texto) => { caixa.replaceChildren(topo, el('p', texto, 'nota')); caixa.hidden = false; };
+  nota('Consultando o CRM e o Histórico…');
+  let viagens = [];
+  let avisoCrm = '';
+  try {
+    const sessao = await sessaoDoCrm();
+    if (sessao) viagens = await viagensProgramadas(sessao);
+    else avisoCrm = 'Entre no CRM nas Configurações para ver os motoristas das viagens programadas.';
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {});
+    avisoCrm = e.message;
+  }
+  if (modo !== 'cte') return;
+  const form = $('form-conferencia');
+  const campoCpf = form.elements.c_motorista_cpf;
+  if (!campoCpf) return;
+  const historico = await lerHistorico().catch(() => []);
+  const { opcoes, sugerida } = opcoesMotoristaCte({ viagens, historico, nota: lerFormularioCte(form).valores });
+  if (!opcoes.length) { nota(avisoCrm || 'Nenhum motorista com CPF nas viagens do CRM nem no Histórico: digite o CPF.'); return; }
+  const sel = el('select');
+  sel.append(el('option', '— Escolha o motorista —'));
+  sel.firstChild.value = '';
+  opcoes.forEach((o, i) => { const op = el('option', `${o.fonte}: ${o.rotulo} · ${o.cpf}`); op.value = String(i); sel.append(op); });
+  const info = el('small', '', 'nota');
+  const aplicar = () => {
+    const o = opcoes[Number(sel.value)];
+    if (sel.value === '' || !o) return;
+    campoCpf.value = o.cpf;
+    campoCpf.closest('label')?.classList.add('conferir');
+  };
+  sel.addEventListener('change', () => { aplicar(); info.textContent = sel.value === '' ? '' : 'CPF colocado no campo "CPF do motorista". Confira.'; });
+  if (sugerida >= 0 && !campoCpf.value.trim()) {
+    sel.value = String(sugerida);
+    aplicar();
+    info.textContent = 'Viagem do CRM com o mesmo destino da nota: CPF já colocado. Confira se é o motorista certo.';
+  } else {
+    info.textContent = 'Escolha o motorista para colocar o CPF no CT-e.';
+  }
+  caixa.replaceChildren(topo, sel, info, ...(avisoCrm ? [el('p', avisoCrm, 'nota')] : []));
+  caixa.hidden = false;
 }
 
 // Pedágios: link do Maps do motorista → rota no Google → praças da rota → cliques nos marcadores do portal Sem Parar.

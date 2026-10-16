@@ -50,7 +50,7 @@ Cada leitura fica guardada em **Histórico (N)**, na tela inicial, por 30 dias (
 ### Usar o modo CT-e manual
 
 1. No painel, selecione **CT-e manual**, anexe a foto ou o PDF da nota e clique em **Ler nota**.
-2. Confira tudo que foi lido. Informe o CPF do motorista e selecione o tomador; expedidor e recebedor ficam em branco para preenchimento manual quando necessários.
+2. Confira tudo que foi lido. A nota não traz o motorista: no quadro **Motorista do CT-e**, escolha uma viagem programada do CRM ou um cadastro do Histórico e o CPF vai para o campo (se uma única viagem tiver o destino da nota, ela já vem escolhida — confira). Selecione o tomador; expedidor e recebedor ficam em branco para preenchimento manual quando necessários.
 3. No Sitra, abra **Digitação de CT-e** e escolha manualmente o **Tipo de Frete**.
 4. Clique em **Preencher CT-e**. A extensão usa os dois primeiros CNPJs como remetente e destinatário, mantém **NF-e/NF**, põe o protocolo de autorização em **Chave NF-e**, usa o primeiro CFOP legível, seleciona **CONFORME NOTA**, informa **VOL** e marca **Frete Combinado**.
 5. Complete manualmente o responsável pelo frete combinado, expedidor/recebedor quando aplicável, placas e qualquer campo que ficou vazio. Confira tudo antes de decidir se deve cadastrar.
