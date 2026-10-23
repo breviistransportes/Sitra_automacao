@@ -3131,7 +3131,7 @@ function mensagemHttp(status, detalhe) {
 function chamarGemini(apiKey, docs, fetchFn = fetch) {
   return gerar(apiKey, docs, { modelo: MODELO, instrucoes: INSTRUCOES, schema: montarSchema() }, fetchFn);
 }
-var MODELO_CONFERENCIA = "gemini-pro-latest";
+var MODELO_CONFERENCIA = "gemini-flash-lite-latest";
 var INSTRUCOES_CONFERENCIA = `Voc\xEA confere n\xFAmeros de uma CNH brasileira (carteira de motorista), d\xEDgito por d\xEDgito.
 - Leia com m\xE1xima aten\xE7\xE3o cada d\xEDgito, sem trocar a ordem nem confundir d\xEDgitos parecidos (1/7, 3/8, 5/6, 0/8).
 - cpf; rg = SOMENTE o n\xFAmero do campo "DOC. IDENTIDADE" (como est\xE1 escrito, inclusive letras do in\xEDcio), SEM o \xF3rg\xE3o emissor e SEM a UF que v\xEAm depois; registro_cnh = campo "N\xBA REGISTRO" (11 d\xEDgitos, n\xE3o \xE9 o CPF, o espelho, o RENACH nem c\xF3digos de valida\xE7\xE3o);
