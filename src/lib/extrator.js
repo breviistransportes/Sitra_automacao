@@ -3,7 +3,7 @@ import { normalizarCampo, cpfValido, cpfCnpjValido, somenteDigitos, textoSeguro,
 import { aplicarRegras } from './regras.js';
 import { conferirComTextoPdf, compararLeituras, camposDivergentes, desempatar, CAMPOS_DUPLA_LEITURA } from './conferencia.js';
 
-export const MODELO = 'gemini-3.8-flash';
+export const MODELO = 'gemini-flash-lite-latest';
 
 export const CAMPOS_IA = CAMPOS.filter(c => c.ia);
 const CAMPOS_GERAIS = CAMPOS.filter(c => c.tela !== 'veiculo');
