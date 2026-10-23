@@ -109,14 +109,14 @@ async function lerDocumentos() {
     }
     // Telefone/e-mail só são aceitos se estiverem escritos nas mensagens/conversas enviadas.
     const textoConfiavel = [docs.mensagens ?? '', ...docs.textos.map(t => t.conteudo)].join('\n');
-    // Duas leituras em paralelo: a completa e a conferência dos números da CNH (modelo mais forte).
+    // Duas leituras em paralelo: a completa e a conferência dos números da CNH.
     const [bruto, segunda] = await Promise.all([
       chamarGemini(cfg.apiKey, docs),
       chamarGeminiConferencia(cfg.apiKey, docs).catch(e => ({ erro: e.message })),
     ]);
-    if (segunda.erro) avisosEntrada.push(`Segunda leitura indisponível (${segunda.erro}) — confira com atenção os números da CNH.`);
+    if (segunda?.erro) avisosEntrada.push(`Segunda leitura indisponível (${segunda.erro}) — confira com atenção os números da CNH.`);
     const textoPdf = docs.pdfs.map(p => p.texto).join('\n');
-    const segundaLeitura = segunda.erro ? null : segunda;
+    const segundaLeitura = segunda?.erro ? null : segunda;
     // Discordaram em algum número da CNH? Uma terceira leitura desempata (2 de 3).
     const terceiraLeitura = camposDivergentes(bruto?.campos, segundaLeitura).length
       ? await chamarGeminiConferencia(cfg.apiKey, docs).catch(() => null)

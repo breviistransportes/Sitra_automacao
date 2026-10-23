@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CAMPOS } from '../src/lib/campos.js';
 import {
-  MODELO, CAMPOS_IA, INSTRUCOES, montarSchema, montarPartes, chamarGemini, posProcessar, ErroExtracao,
+  MODELO, CAMPOS_IA, INSTRUCOES, montarSchema, montarPartes, chamarGemini, posProcessar, ErroExtracao, LIMITE_CONVERSA,
 } from '../src/lib/extrator.js';
 
 const DOCS = {
@@ -340,5 +340,22 @@ describe('vários veículos (cavalo + carreta)', () => {
   it('instruções pedem um item de veiculos por CRLV', () => {
     expect(INSTRUCOES).toMatch(/veiculos/);
     expect(INSTRUCOES).toMatch(/cavalo.*carreta/i);
+  });
+});
+
+describe('economia de tokens', () => {
+  it('manda só o final de uma conversa longa do WhatsApp', () => {
+    const conteudo = 'antigo '.repeat(20000) + 'meu cel é 31 98888-7777';
+    const p = montarPartes({ textos: [{ nome: 'Conversa.txt', conteudo }], imagens: [], pdfs: [] });
+    const texto = p.find(x => x.text?.startsWith('Conversa do WhatsApp')).text;
+    expect(texto.length).toBeLessThan(LIMITE_CONVERSA + 200);
+    expect(texto).toContain('31 98888-7777');
+    expect(texto).toContain('início da conversa omitido');
+  });
+
+  it('conversa curta vai inteira', () => {
+    const p = montarPartes({ textos: [{ nome: 'c.txt', conteudo: 'oi, cpf 529.982.247-25' }], imagens: [], pdfs: [] });
+    expect(p.some(x => x.text?.endsWith('oi, cpf 529.982.247-25'))).toBe(true);
+    expect(p.some(x => x.text?.includes('omitido'))).toBe(false);
   });
 });

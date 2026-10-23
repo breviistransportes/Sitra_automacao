@@ -82,14 +82,22 @@ import { chamarGeminiConferencia, posProcessar, MODELO_CONFERENCIA } from '../sr
 import { prepararDocumentos } from '../src/lib/entrada.js';
 
 describe('integração', () => {
-  it('segunda leitura usa o modelo Pro e pede só os números da CNH', async () => {
+  it('segunda leitura pede só os números da CNH, sem a conversa', async () => {
     const chamadas = [];
     const fetchFn = async (url, op) => { chamadas.push({ url, corpo: JSON.parse(op.body) });
       return { ok: true, status: 200, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"cpf":"52998224725","rg":"","registro_cnh":"04123456789","data_nascimento":"","data_primeira_cnh":"","data_validade_cnh":"","data_emissao_cnh":""}' }] } }] }) }; };
-    const r = await chamarGeminiConferencia('K', { textos: [], imagens: [], pdfs: [{ nome: 'CNH-e.pdf', base64: 'A' }] }, fetchFn);
+    const r = await chamarGeminiConferencia('K', { textos: [{ nome: 'c.txt', conteudo: 'CONVERSA' }], mensagens: 'MSG', imagens: [], pdfs: [{ nome: 'CNH-e.pdf', base64: 'A' }] }, fetchFn);
+    expect(JSON.stringify(chamadas[0].corpo.contents)).not.toMatch(/CONVERSA|MSG/);
     expect(chamadas[0].url).toContain(MODELO_CONFERENCIA);
     expect(Object.keys(chamadas[0].corpo.generationConfig.responseJsonSchema.properties).sort()).toEqual(['cpf', 'data_emissao_cnh', 'data_nascimento', 'data_primeira_cnh', 'data_validade_cnh', 'registro_cnh', 'rg']);
     expect(r.registro_cnh).toBe('04123456789');
+  });
+
+  it('sem foto nem PDF não gasta a segunda leitura', async () => {
+    let chamou = false;
+    const r = await chamarGeminiConferencia('K', { textos: [{ nome: 'c.txt', conteudo: 'x' }], imagens: [], pdfs: [] }, async () => { chamou = true; });
+    expect(chamou).toBe(false);
+    expect(r).toBeNull();
   });
 
   it('posProcessar aplica dupla leitura e texto do PDF antes das regras', () => {

@@ -3104,6 +3104,9 @@ function montarSchema() {
     additionalProperties: false
   };
 }
+var LIMITE_CONVERSA = 3e4;
+var finalDaConversa = (c) => c.length > LIMITE_CONVERSA ? `[in\xEDcio da conversa omitido]
+${c.slice(-LIMITE_CONVERSA)}` : c;
 function montarPartes({ textos, imagens, pdfs, mensagens }) {
   return [
     ...pdfs.flatMap((p) => [
@@ -3115,7 +3118,7 @@ function montarPartes({ textos, imagens, pdfs, mensagens }) {
       { inlineData: { mimeType: i.mediaType, data: i.base64 } }
     ]),
     ...textos.map((t) => ({ text: `Conversa do WhatsApp (${nomeSeguro(t.nome)}):
-${t.conteudo}` })),
+${finalDaConversa(t.conteudo)}` })),
     ...mensagens?.trim() ? [{ text: `Mensagens do motorista (coladas pelo operador):
 ${mensagens.trim()}` }] : [],
     { text: "Extraia os campos do cadastro conforme as instru\xE7\xF5es." }
@@ -3145,8 +3148,9 @@ function schemaConferencia() {
     additionalProperties: false
   };
 }
-function chamarGeminiConferencia(apiKey, docs, fetchFn = fetch) {
-  return gerar(apiKey, docs, { modelo: MODELO_CONFERENCIA, instrucoes: INSTRUCOES_CONFERENCIA, schema: schemaConferencia() }, fetchFn);
+async function chamarGeminiConferencia(apiKey, docs, fetchFn = fetch) {
+  if (!docs.imagens.length && !docs.pdfs.length) return null;
+  return gerar(apiKey, { imagens: docs.imagens, pdfs: docs.pdfs, textos: [] }, { modelo: MODELO_CONFERENCIA, instrucoes: INSTRUCOES_CONFERENCIA, schema: schemaConferencia() }, fetchFn);
 }
 async function gerar(apiKey, docs, { modelo, instrucoes, schema }, fetchFn) {
   let resposta;
@@ -31983,9 +31987,9 @@ async function lerDocumentos() {
       chamarGemini(cfg.apiKey, docs),
       chamarGeminiConferencia(cfg.apiKey, docs).catch((e) => ({ erro: e.message }))
     ]);
-    if (segunda.erro) avisosEntrada.push(`Segunda leitura indispon\xEDvel (${segunda.erro}) \u2014 confira com aten\xE7\xE3o os n\xFAmeros da CNH.`);
+    if (segunda?.erro) avisosEntrada.push(`Segunda leitura indispon\xEDvel (${segunda.erro}) \u2014 confira com aten\xE7\xE3o os n\xFAmeros da CNH.`);
     const textoPdf = docs.pdfs.map((p) => p.texto).join("\n");
-    const segundaLeitura = segunda.erro ? null : segunda;
+    const segundaLeitura = segunda?.erro ? null : segunda;
     const terceiraLeitura = camposDivergentes(bruto?.campos, segundaLeitura).length ? await chamarGeminiConferencia(cfg.apiKey, docs).catch(() => null) : null;
     const r = posProcessar(bruto, cfg.padroes, { textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura });
     $("form-conferencia").innerHTML = montarFormulario(r.valores, r.veiculos);
