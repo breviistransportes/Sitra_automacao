@@ -129,8 +129,9 @@ export function chamarGemini(apiKey, docs, fetchFn = fetch) {
   return gerar(apiKey, docs, { modelo: MODELO, instrucoes: INSTRUCOES, schema: montarSchema() }, fetchFn);
 }
 
-// Segunda leitura independente, com modelo mais forte, só dos números da CNH (para pegar dígito trocado).
-export const MODELO_CONFERENCIA = 'gemini-pro-latest';
+// Segunda leitura independente, com outro modelo, só dos números da CNH (para pegar dígito trocado).
+// Flash-Lite em vez do Pro, para caber na cota da chave gratuita do Gemini.
+export const MODELO_CONFERENCIA = 'gemini-flash-lite-latest';
 const INSTRUCOES_CONFERENCIA = `Você confere números de uma CNH brasileira (carteira de motorista), dígito por dígito.
 - Leia com máxima atenção cada dígito, sem trocar a ordem nem confundir dígitos parecidos (1/7, 3/8, 5/6, 0/8).
 - cpf; rg = SOMENTE o número do campo "DOC. IDENTIDADE" (como está escrito, inclusive letras do início), SEM o órgão emissor e SEM a UF que vêm depois; registro_cnh = campo "Nº REGISTRO" (11 dígitos, não é o CPF, o espelho, o RENACH nem códigos de validação);
