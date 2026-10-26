@@ -7,6 +7,7 @@ await build({ ...comum, entryPoints: ['src/sidepanel/main.js'], outfile: 'extens
 await build({ ...comum, entryPoints: ['src/options/main.js'], outfile: 'extensao/options/main.bundle.js', format: 'esm' });
 await build({ ...comum, entryPoints: ['src/content/semparar-inicio.js'], outfile: 'extensao/content/semparar.bundle.js', format: 'iife' });
 await build({ ...comum, entryPoints: ['src/content/ciot.js'], outfile: 'extensao/content/ciot.bundle.js', format: 'iife' });
+await build({ ...comum, entryPoints: ['src/content/crm.js'], outfile: 'extensao/content/crm.bundle.js', format: 'iife' });
 await build({ ...comum, entryPoints: ['src/content/injetado.js'], outfile: 'extensao/content/injetado.bundle.js', format: 'iife' });
 
 // Worker do pdf.js (leitura do texto dos PDFs no painel).

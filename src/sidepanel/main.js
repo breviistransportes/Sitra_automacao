@@ -18,6 +18,7 @@ import { montarCiot, ehWebrouter, salvarUltimoCte, lerUltimoCte, viagensDoCadast
 import { COLUNAS_CIOT } from '../lib/crm.js';
 import { opcoesMotoristaCte } from '../lib/motorista-cte.js';
 import { chamarGeminiAntt, posProcessarAntt } from '../lib/extrator-antt.js';
+import { CHAVE_LEITURA_CRM, leituraCrmValida } from '../lib/leitura-crm.js';
 
 // Documento que identifica o cadastro em cada tela do Sitra.
 const DOCUMENTO = { motorista: 'cpf', proprietario: 'prop_cpf_cnpj', veiculo: 'veic_placa' };
@@ -121,21 +122,38 @@ async function lerDocumentos() {
     const terceiraLeitura = camposDivergentes(bruto?.campos, segundaLeitura).length
       ? await chamarGeminiConferencia(cfg.apiKey, docs).catch(() => null)
       : null;
-    const r = posProcessar(bruto, cfg.padroes, { textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura });
-    $('form-conferencia').innerHTML = montarFormulario(r.valores, r.veiculos);
-    const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(', ')}`] : [];
-    const avisos = [...docsLidos, ...avisosEntrada, ...r.avisos];
-    preencherLista($('avisos'), avisos);
-    registroAtual = null;
-    await guardarNoHistorico({ valores: r.valores, veiculos: r.veiculos, avisos });
-    mostrarCruzamento();
-    confirmarSobrescrita = false;
-    mostrar('conferencia');
+    await exibirCadastro(bruto, cfg, { textoConfiavel, textoPdf, segundaLeitura, terceiraLeitura }, avisosEntrada);
   } catch (e) {
     mostrar('entrada');
     mensagem(e.message);
     $('btn-ler').textContent = 'Tentar de novo';
   }
+}
+
+// Leitura bruta (Gemini ou CRM) → tela de conferência do cadastro + histórico.
+async function exibirCadastro(bruto, cfg, contexto, avisosEntrada = []) {
+  const r = posProcessar(bruto, cfg.padroes, contexto);
+  $('form-conferencia').innerHTML = montarFormulario(r.valores, r.veiculos);
+  const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(', ')}`] : [];
+  const avisos = [...docsLidos, ...avisosEntrada, ...r.avisos];
+  preencherLista($('avisos'), avisos);
+  registroAtual = null;
+  await guardarNoHistorico({ valores: r.valores, veiculos: r.veiculos, avisos });
+  mostrarCruzamento();
+  confirmarSobrescrita = false;
+  mostrar('conferencia');
+}
+
+// "Usar na extensão" da aba Leitura de documentos do CRM: o background guarda a leitura na sessão.
+async function importarLeituraDoCrm() {
+  const { [CHAVE_LEITURA_CRM]: pendente } = await chrome.storage.session.get(CHAVE_LEITURA_CRM);
+  if (!pendente) return;
+  await chrome.storage.session.remove(CHAVE_LEITURA_CRM);
+  if (!leituraCrmValida(pendente.leitura)) { mensagem('A leitura recebida do CRM veio num formato inesperado.'); return; }
+  aplicarModo('cadastro');
+  const cfg = await lerConfig();
+  await exibirCadastro(pendente.leitura, cfg, { textoConfiavel: pendente.mensagens ?? '' }, ['Leitura feita no CRM (Leitura de documentos).']);
+  mensagem('Leitura do CRM carregada: confira os campos antes de preencher.', 'alerta');
 }
 
 async function executarNoSitra(func, args = []) {
@@ -835,6 +853,11 @@ async function salvarConfigPainel() {
   $('config').hidden = true;
   mensagem('Configurações salvas.', 'alerta');
 }
+
+importarLeituraDoCrm().catch(e => mensagem(e.message));
+chrome.storage.onChanged.addListener((mudou, area) => {
+  if (area === 'session' && mudou[CHAVE_LEITURA_CRM]?.newValue) importarLeituraDoCrm().catch(e => mensagem(e.message));
+});
 
 // Primeira vez (sem chave salva): já abre as configurações.
 lerConfig().then(cfg => { if (!cfg.apiKey) abrirConfig('Primeiro uso: cole a chave da API do Gemini e clique em Salvar.'); }).catch(() => {});
