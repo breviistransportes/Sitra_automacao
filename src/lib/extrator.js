@@ -3,7 +3,7 @@ import { normalizarCampo, cpfValido, cpfCnpjValido, somenteDigitos, textoSeguro,
 import { aplicarRegras } from './regras.js';
 import { conferirComTextoPdf, compararLeituras, camposDivergentes, desempatar, CAMPOS_DUPLA_LEITURA } from './conferencia.js';
 
-export const MODELO = 'gemini-3.8-flash';
+export const MODELO = 'gemini-flash-lite-latest';
 
 export const CAMPOS_IA = CAMPOS.filter(c => c.ia);
 const CAMPOS_GERAIS = CAMPOS.filter(c => c.tela !== 'veiculo');
@@ -101,6 +101,11 @@ export function montarSchema() {
   };
 }
 
+// Conversa do WhatsApp: só o final vai para a IA (os dados do cadastro ficam nas últimas mensagens);
+// a conversa inteira de meses custava centenas de milhares de tokens por leitura.
+export const LIMITE_CONVERSA = 30000;
+const finalDaConversa = (c) => c.length > LIMITE_CONVERSA ? `[início da conversa omitido]\n${c.slice(-LIMITE_CONVERSA)}` : c;
+
 export function montarPartes({ textos, imagens, pdfs, mensagens }) {
   return [
     ...pdfs.flatMap(p => [
@@ -111,7 +116,7 @@ export function montarPartes({ textos, imagens, pdfs, mensagens }) {
       { text: `Arquivo: ${nomeSeguro(i.nome)}` },
       { inlineData: { mimeType: i.mediaType, data: i.base64 } },
     ]),
-    ...textos.map(t => ({ text: `Conversa do WhatsApp (${nomeSeguro(t.nome)}):\n${t.conteudo}` })),
+    ...textos.map(t => ({ text: `Conversa do WhatsApp (${nomeSeguro(t.nome)}):\n${finalDaConversa(t.conteudo)}` })),
     ...(mensagens?.trim() ? [{ text: `Mensagens do motorista (coladas pelo operador):\n${mensagens.trim()}` }] : []),
     { text: 'Extraia os campos do cadastro conforme as instruções.' },
   ];
@@ -129,8 +134,8 @@ export function chamarGemini(apiKey, docs, fetchFn = fetch) {
   return gerar(apiKey, docs, { modelo: MODELO, instrucoes: INSTRUCOES, schema: montarSchema() }, fetchFn);
 }
 
-// Segunda leitura independente, com outro modelo, só dos números da CNH (para pegar dígito trocado).
-// Flash-Lite em vez do Pro, para caber na cota da chave gratuita do Gemini.
+// Segunda leitura independente, só dos números da CNH (para pegar dígito trocado).
+// Flash-Lite em tudo: é o modelo mais barato do Gemini.
 export const MODELO_CONFERENCIA = 'gemini-flash-lite-latest';
 const INSTRUCOES_CONFERENCIA = `Você confere números de uma CNH brasileira (carteira de motorista), dígito por dígito.
 - Leia com máxima atenção cada dígito, sem trocar a ordem nem confundir dígitos parecidos (1/7, 3/8, 5/6, 0/8).
@@ -145,8 +150,11 @@ function schemaConferencia() {
     additionalProperties: false,
   };
 }
-export function chamarGeminiConferencia(apiKey, docs, fetchFn = fetch) {
-  return gerar(apiKey, docs, { modelo: MODELO_CONFERENCIA, instrucoes: INSTRUCOES_CONFERENCIA, schema: schemaConferencia() }, fetchFn);
+// Só fotos e PDFs: a conferência lê os números da CNH; a conversa não ajuda e só custaria tokens.
+// Sem foto nem PDF não há CNH a conferir — devolve null sem chamar a API.
+export async function chamarGeminiConferencia(apiKey, docs, fetchFn = fetch) {
+  if (!docs.imagens.length && !docs.pdfs.length) return null;
+  return gerar(apiKey, { imagens: docs.imagens, pdfs: docs.pdfs, textos: [] }, { modelo: MODELO_CONFERENCIA, instrucoes: INSTRUCOES_CONFERENCIA, schema: schemaConferencia() }, fetchFn);
 }
 
 export async function gerar(apiKey, docs, { modelo, instrucoes, schema }, fetchFn) {

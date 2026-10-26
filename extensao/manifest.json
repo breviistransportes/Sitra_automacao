@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Automação Sitra",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "description": "Lê documentos com IA e preenche cadastros e a Digitação manual de CT-e no Sitra Web Revolution; marca no Sem Parar os pedágios da rota do motorista e preenche o CIOT no Webrouter.",
   "permissions": ["sidePanel", "storage", "scripting"],
   "host_permissions": [
@@ -22,6 +22,11 @@
       "js": ["content/semparar.bundle.js"],
       "run_at": "document_start",
       "world": "MAIN"
+    },
+    {
+      "matches": ["https://breviisia-crm.w7mwle.easypanel.host/*"],
+      "js": ["content/crm.bundle.js"],
+      "run_at": "document_start"
     }
   ],
   "background": { "service_worker": "background.js" },
