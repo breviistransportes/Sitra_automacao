@@ -3082,7 +3082,7 @@ function montarSchema() {
     required: ["valor", "certeza", "fonte"],
     additionalProperties: false
   };
-  const objeto = (campos) => {
+  const objeto2 = (campos) => {
     const daIa = campos.filter((c) => c.ia);
     return {
       type: "object",
@@ -3094,9 +3094,9 @@ function montarSchema() {
   return {
     type: "object",
     properties: {
-      campos: objeto(CAMPOS_GERAIS),
+      campos: objeto2(CAMPOS_GERAIS),
       // Um item por CRV/CRLV: cavalo e carreta são dois cadastros de veículo no Sitra.
-      veiculos: { type: "array", items: objeto(CAMPOS_VEICULO) },
+      veiculos: { type: "array", items: objeto2(CAMPOS_VEICULO) },
       documentos_encontrados: { type: "array", items: { type: "string" } },
       avisos: { type: "array", items: { type: "string" } }
     },
@@ -31902,12 +31902,24 @@ function posProcessarAntt(bruto) {
 }
 
 // src/lib/leitura-crm.js
+var ORIGENS_CRM = ["https://breviisia-crm.w7mwle.easypanel.host"];
 var CHAVE_LEITURA_CRM = "leituraCrm";
+var PAGINA_LEITURA_CRM = `${ORIGENS_CRM[0]}/leitura-documentos`;
 var campoValido = (c) => c && typeof c === "object" && typeof c.valor === "string";
-var camposValidos = (o) => o && typeof o === "object" && !Array.isArray(o) && Object.values(o).every(campoValido);
+var listaValida = (c) => c && typeof c === "object" && Array.isArray(c.valor) && c.valor.every((v) => typeof v === "string");
+var objeto = (o) => Boolean(o) && typeof o === "object" && !Array.isArray(o);
+var camposValidos = (o) => objeto(o) && Object.values(o).every(campoValido);
 var textos = (a) => Array.isArray(a) && a.every((t) => typeof t === "string");
-function leituraCrmValida(l) {
-  return Boolean(l) && camposValidos(l.campos) && Array.isArray(l.veiculos) && l.veiculos.every(camposValidos) && textos(l.documentos_encontrados) && textos(l.avisos);
+function leituraCrmValida(l, documento = "cadastro") {
+  if (!l || typeof l !== "object") return false;
+  if (documento === "cadastro") {
+    return camposValidos(l.campos) && Array.isArray(l.veiculos) && l.veiculos.every(camposValidos) && textos(l.documentos_encontrados) && textos(l.avisos);
+  }
+  if (documento === "cte") {
+    return objeto(l.campos) && Object.entries(l.campos).every(([k, c]) => k === "cfops" || k === "outros_cnpjs" ? listaValida(c) : campoValido(c)) && textos(l.documentos_encontrados) && textos(l.avisos);
+  }
+  if (documento === "antt") return typeof l.cpf_cnpj === "string" && typeof l.rntrc === "string" && typeof l.encontrou_antt === "boolean";
+  return false;
 }
 
 // src/sidepanel/main.js
@@ -31964,7 +31976,7 @@ async function lerDocumentos() {
   mensagem("");
   const cfg = await lerConfig();
   if (!cfg.apiKey) {
-    await abrirConfig("Cole a chave da API do Gemini e clique em Salvar.");
+    abrirLeituraNoCrm();
     return;
   }
   mostrar("lendo");
@@ -31980,15 +31992,7 @@ async function lerDocumentos() {
       throw new Error(["Nenhuma foto/PDF encontrada e nenhuma mensagem colada.", ...avisosEntrada].join(" "));
     }
     if (modo === "cte") {
-      const r = posProcessarCte(await chamarGeminiCte(cfg.apiKey, docs));
-      $("form-conferencia").innerHTML = montarFormularioCte(r.valores);
-      const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(", ")}`] : [];
-      preencherLista($("avisos"), [...docsLidos, ...avisosEntrada, ...r.avisos]);
-      await salvarUltimoCte(lerFormularioCte($("form-conferencia")).valores).catch(() => {
-      });
-      confirmarSobrescrita = false;
-      mostrar("conferencia");
-      mostrarMotoristaCte();
+      await exibirCte(await chamarGeminiCte(cfg.apiKey, docs), avisosEntrada);
       return;
     }
     const textoConfiavel = [docs.mensagens ?? "", ...docs.textos.map((t) => t.conteudo)].join("\n");
@@ -32019,17 +32023,44 @@ async function exibirCadastro(bruto, cfg, contexto, avisosEntrada = []) {
   confirmarSobrescrita = false;
   mostrar("conferencia");
 }
+async function exibirCte(bruto, avisosEntrada = []) {
+  const r = posProcessarCte(bruto);
+  $("form-conferencia").innerHTML = montarFormularioCte(r.valores);
+  const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(", ")}`] : [];
+  preencherLista($("avisos"), [...docsLidos, ...avisosEntrada, ...r.avisos]);
+  await salvarUltimoCte(lerFormularioCte($("form-conferencia")).valores).catch(() => {
+  });
+  confirmarSobrescrita = false;
+  mostrar("conferencia");
+  mostrarMotoristaCte();
+}
+function aplicarAntt(r, origem) {
+  if (r.cpf_cnpj) $("ciot-contratado-doc").value = r.cpf_cnpj;
+  if (r.rntrc) $("ciot-contratado-rntrc").value = r.rntrc;
+  $("ciot-contratado-origem").textContent = [origem, ...r.avisos].join(" ");
+}
+function abrirLeituraNoCrm(documento = modo === "cte" ? "cte" : modo === "ciot" ? "antt" : "cadastro") {
+  chrome.tabs.create({ url: `${PAGINA_LEITURA_CRM}?documento=${documento}` });
+}
 async function importarLeituraDoCrm() {
   const { [CHAVE_LEITURA_CRM]: pendente } = await chrome.storage.session.get(CHAVE_LEITURA_CRM);
   if (!pendente) return;
   await chrome.storage.session.remove(CHAVE_LEITURA_CRM);
-  if (!leituraCrmValida(pendente.leitura)) {
+  const documento = pendente.documento ?? "cadastro";
+  if (!leituraCrmValida(pendente.leitura, documento)) {
     mensagem("A leitura recebida do CRM veio num formato inesperado.");
     return;
   }
-  aplicarModo("cadastro");
-  const cfg = await lerConfig();
-  await exibirCadastro(pendente.leitura, cfg, { textoConfiavel: pendente.mensagens ?? "" }, ["Leitura feita no CRM (Leitura de documentos)."]);
+  if (documento === "antt") {
+    await aplicarModo("ciot");
+    aplicarAntt(posProcessarAntt(pendente.leitura), "Lido do cart\xE3o da ANTT no CRM.");
+    mensagem("Cart\xE3o da ANTT lido no CRM: confira o contratado antes de preencher.", "alerta");
+    return;
+  }
+  const aviso = ["Leitura feita no CRM (Leitura de documentos)."];
+  aplicarModo(documento === "cte" ? "cte" : "cadastro", { restaurar: false });
+  if (documento === "cte") await exibirCte(pendente.leitura, aviso);
+  else await exibirCadastro(pendente.leitura, await lerConfig(), { textoConfiavel: pendente.mensagens ?? "" }, aviso);
   mensagem("Leitura do CRM carregada: confira os campos antes de preencher.", "alerta");
 }
 async function executarNoSitra(func, args = []) {
@@ -32153,11 +32184,53 @@ function recomecar() {
   mostrar(modo === "pedagios" ? "pedagios" : modo === "ciot" ? "ciot" : "entrada");
   if (modo === "ciot") {
     $("ciot-data-fim").value = "";
-    carregarCiot();
+    return carregarCiot();
   }
+  return void 0;
 }
-function aplicarModo(novoModo) {
+var telasGuardadas = {};
+var etapaVisivel = () => document.querySelector("section[data-etapa]:not([hidden])")?.dataset.etapa;
+function guardarTela() {
+  const etapa = etapaVisivel();
+  if (!["cadastro", "cte"].includes(modo) || !["conferencia", "resultado"].includes(etapa)) return;
+  const tirar = (id) => {
+    const f = document.createDocumentFragment();
+    f.append(...$(id).childNodes);
+    return f;
+  };
+  telasGuardadas[modo] = {
+    etapa,
+    registroAtual,
+    titulo: $("resultado-titulo").textContent,
+    form: tirar("form-conferencia"),
+    avisos: tirar("avisos"),
+    relatorio: tirar("relatorio")
+  };
+}
+function restaurarTela() {
+  const t = telasGuardadas[modo];
+  if (!t) return false;
+  delete telasGuardadas[modo];
+  arquivos = [];
+  listarArquivos();
+  $("form-conferencia").replaceChildren(t.form);
+  $("avisos").replaceChildren(t.avisos);
+  $("relatorio").replaceChildren(t.relatorio);
+  $("resultado-titulo").textContent = t.titulo;
+  registroAtual = t.registroAtual;
+  confirmarSobrescrita = false;
+  mensagem("");
+  atualizarBotaoHistorico();
+  $("resultado-pedagios").hidden = true;
+  mostrar(t.etapa);
+  if (modo === "cte") mostrarMotoristaCte();
+  else mostrarCruzamento();
+  return true;
+}
+function aplicarModo(novoModo, { restaurar = true } = {}) {
+  guardarTela();
   modo = ["cte", "pedagios", "ciot"].includes(novoModo) ? novoModo : "cadastro";
+  if (!restaurar) delete telasGuardadas[modo];
   for (const botao of document.querySelectorAll("[data-modo]")) {
     const ativo = botao.dataset.modo === modo;
     botao.classList.toggle("ativo", ativo);
@@ -32174,7 +32247,9 @@ function aplicarModo(novoModo) {
   $("instrucao-preenchimento").textContent = cte ? "No Sitra, abra Digita\xE7\xE3o de CT-e e escolha o Tipo de Frete antes de preencher." : 'Ordem no Sitra: Propriet\xE1rio \u2192 Ve\xEDculo (um cadastro por placa: cavalo e carreta) \u2192 Motorista. Abra a tela e clique em "Preencher".';
   $("btn-preencher").textContent = cte ? "Preencher CT-e" : "Preencher no Sitra";
   $("btn-novo").textContent = ciot ? "Pr\xF3ximo CIOT" : cte ? "Pr\xF3ximo CT-e" : "Pr\xF3ximo motorista";
-  recomecar();
+  $("btn-ler-crm").textContent = cte ? "Ler a nota no CRM" : "Ler os documentos no CRM";
+  if (restaurarTela()) return void 0;
+  return recomecar();
 }
 $("zona").addEventListener("dragover", (e) => {
   e.preventDefault();
@@ -32197,6 +32272,8 @@ $("zona").addEventListener("keydown", (e) => {
   }
 });
 $("btn-ler").addEventListener("click", lerDocumentos);
+$("btn-ler-crm").addEventListener("click", () => abrirLeituraNoCrm());
+$("btn-antt-crm").addEventListener("click", () => abrirLeituraNoCrm("antt"));
 $("btn-historico").addEventListener("click", abrirHistorico);
 $("crm-entrar").addEventListener("click", entrarNoCrm);
 $("crm-sair").addEventListener("click", sairDoCrm);
@@ -32685,7 +32762,7 @@ async function lerCartaoAntt(arquivo) {
   mensagem("");
   const cfg = await lerConfig();
   if (!cfg.apiKey) {
-    await abrirConfig("Cole a chave da API do Gemini e clique em Salvar.");
+    abrirLeituraNoCrm("antt");
     return;
   }
   $("ciot-contratado-origem").textContent = "Lendo o cart\xE3o da ANTT\u2026";
@@ -32693,10 +32770,7 @@ async function lerCartaoAntt(arquivo) {
     const entrada = await lerEntrada([arquivo]);
     const docs = await prepararDocumentos(entrada.itens, { redimensionar: redimensionarImagem, lerTextoPdf: textoDoPdf });
     if (!temConteudo(docs, "")) throw new Error("Arquivo n\xE3o suportado: use foto (JPG/PNG) ou PDF do cart\xE3o da ANTT.");
-    const r = posProcessarAntt(await chamarGeminiAntt(cfg.apiKey, docs));
-    if (r.cpf_cnpj) $("ciot-contratado-doc").value = r.cpf_cnpj;
-    if (r.rntrc) $("ciot-contratado-rntrc").value = r.rntrc;
-    $("ciot-contratado-origem").textContent = ["Lido do cart\xE3o da ANTT.", ...r.avisos].join(" ");
+    aplicarAntt(posProcessarAntt(await chamarGeminiAntt(cfg.apiKey, docs)), "Lido do cart\xE3o da ANTT.");
   } catch (e) {
     $("ciot-contratado-origem").textContent = "";
     mensagem(e.message);
@@ -32788,10 +32862,6 @@ async function abrirConfig(aviso = "") {
 }
 async function salvarConfigPainel() {
   const apiKey = $("cfg-apiKey").value.trim();
-  if (!apiKey) {
-    mensagem("Cole a chave da API do Gemini.");
-    return;
-  }
   await salvarConfig({
     apiKey,
     mapsKey: $("cfg-mapsKey").value.trim(),
@@ -32803,16 +32873,17 @@ async function salvarConfigPainel() {
     }
   });
   $("config").hidden = true;
+  mostrarLeituraLocal(apiKey);
   mensagem("Configura\xE7\xF5es salvas.", "alerta");
+}
+function mostrarLeituraLocal(apiKey) {
+  document.body.classList.toggle("sem-gemini", !apiKey);
 }
 importarLeituraDoCrm().catch((e) => mensagem(e.message));
 chrome.storage.onChanged.addListener((mudou, area) => {
   if (area === "session" && mudou[CHAVE_LEITURA_CRM]?.newValue) importarLeituraDoCrm().catch((e) => mensagem(e.message));
 });
-lerConfig().then((cfg) => {
-  if (!cfg.apiKey) abrirConfig("Primeiro uso: cole a chave da API do Gemini e clique em Salvar.");
-}).catch(() => {
-});
+lerConfig().then((cfg) => mostrarLeituraLocal(cfg.apiKey)).catch(() => mostrarLeituraLocal(""));
 /*! Bundled license information:
 
 jszip/dist/jszip.min.js:
