@@ -6,7 +6,7 @@ import { textoDoPdf } from '../lib/pdf.js';
 import { camposDivergentes } from '../lib/conferencia.js';
 import { lerConfig, salvarConfig } from '../lib/config.js';
 import { montarFormulario, lerFormulario, mostrarAba, abaAtiva, quantidadeVeiculos, rotuloDaAba, dadosDoFormulario } from './formulario.js';
-import { entrar, sair, renovarSeVencendo, viagensProgramadas, lerSessao, salvarSessao } from '../lib/crm.js';
+import { entrar, sair, renovarSeVencendo, viagensProgramadas, lerSessao, salvarSessao, motoristasSalvos, marcarMotoristaUsado, excluirMotoristaSalvo } from '../lib/crm.js';
 import { cruzarComViagens } from '../lib/cruzamento.js';
 import { lerHistorico, salvarNoHistorico, excluirDoHistorico, apagarHistorico, resumoDoRegistro } from '../lib/historico.js';
 import { montarFormularioCte, lerFormularioCte } from './formulario-cte.js';
@@ -362,6 +362,7 @@ function aplicarModo(novoModo, { restaurar = true } = {}) {
   $('btn-preencher').textContent = cte ? 'Preencher CT-e' : 'Preencher no Sitra';
   $('btn-novo').textContent = ciot ? 'Próximo CIOT' : cte ? 'Próximo CT-e' : 'Próximo motorista';
   $('btn-ler-crm').textContent = cte ? 'Ler a nota no CRM' : 'Ler os documentos no CRM';
+  $('btn-salvos').hidden = cte;
   if (restaurarTela()) return undefined;
   return recomecar();
 }
@@ -378,6 +379,9 @@ $('btn-ler').addEventListener('click', lerDocumentos);
 $('btn-ler-crm').addEventListener('click', () => abrirLeituraNoCrm());
 $('btn-antt-crm').addEventListener('click', () => abrirLeituraNoCrm('antt'));
 $('btn-historico').addEventListener('click', abrirHistorico);
+$('btn-salvos').addEventListener('click', abrirSalvos);
+$('btn-salvos-voltar').addEventListener('click', recomecar);
+$('btn-salvos-atualizar').addEventListener('click', abrirSalvos);
 $('crm-entrar').addEventListener('click', entrarNoCrm);
 $('crm-sair').addEventListener('click', sairDoCrm);
 $('btn-historico-voltar').addEventListener('click', recomecar);
@@ -451,6 +455,73 @@ async function abrirHistorico() {
   $('btn-historico-apagar').classList.remove('confirmar');
   $('btn-historico-apagar').textContent = 'Apagar tudo';
   mostrar('historico');
+}
+
+// "Cadastrar motorista" do CRM: a leitura fica na tabela motoristas_salvos; aqui a lista e o "Usar".
+const dataCurta = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); };
+
+async function abrirSalvos() {
+  mensagem('');
+  let sessao;
+  try {
+    sessao = await sessaoDoCrm();
+  } catch (e) {
+    mensagem(e.message);
+    return;
+  }
+  if (!sessao) { abrirConfig('Entre com o seu login do CRM para ver os motoristas salvos.'); return; }
+  $('btn-salvos').disabled = true;
+  let lista;
+  try {
+    lista = await motoristasSalvos(sessao);
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {});
+    mensagem(e.message);
+    return;
+  } finally {
+    $('btn-salvos').disabled = false;
+  }
+  const ul = $('lista-salvos');
+  ul.innerHTML = '';
+  for (const m of lista) {
+    const li = document.createElement('li');
+    const info = document.createElement('div');
+    info.className = 'registro';
+    const titulo = document.createElement('strong');
+    titulo.textContent = m.nome || '(sem nome)';
+    const detalhe = document.createElement('small');
+    detalhe.textContent = [dataCurta(m.created_at), m.cpf && `CPF ${m.cpf}`, (m.placas ?? []).join(', ')].filter(Boolean).join(' · ');
+    info.append(titulo, detalhe);
+    if (m.usado_em) {
+      const usado = document.createElement('small');
+      usado.className = 'usado';
+      usado.textContent = `Já usado em ${dataCurta(m.usado_em)}`;
+      info.append(usado);
+    }
+    const usar = document.createElement('button');
+    usar.textContent = 'Usar';
+    usar.onclick = () => usarSalvo(m, sessao);
+    const excluir = document.createElement('button');
+    excluir.textContent = 'Excluir';
+    excluir.className = 'secundario';
+    // Sem confirm() do navegador: o primeiro clique só pede confirmação.
+    excluir.onclick = async () => {
+      if (!excluir.classList.contains('confirmar')) { excluir.classList.add('confirmar'); excluir.textContent = 'Confirmar'; return; }
+      try { await excluirMotoristaSalvo(sessao, m.id); abrirSalvos(); } catch (e) { mensagem(e.message); }
+    };
+    li.append(info, usar, excluir);
+    ul.append(li);
+  }
+  $('salvos-vazio').hidden = lista.length > 0;
+  mostrar('salvos');
+}
+
+async function usarSalvo(m, sessao) {
+  if (!leituraCrmValida(m.leitura, 'cadastro')) { mensagem('Esse motorista salvo está num formato que a extensão não reconhece.'); return; }
+  await exibirCadastro(m.leitura, await lerConfig(), { textoConfiavel: m.mensagens ?? '' }, [`Motorista salvo no CRM em ${dataCurta(m.created_at)}.`]);
+  mensagem('Motorista salvo carregado: confira os campos e clique em "Preencher no Sitra".', 'alerta');
+  // Marcar como usado é só um lembrete: se falhar, o preenchimento segue.
+  marcarMotoristaUsado(sessao, m.id).catch(() => {});
 }
 
 function abrirRegistro(r) {
@@ -670,16 +741,24 @@ async function marcarPedagios() {
     const lista = naRota.map(({ identificadorMapa, nomePraca, latitude, longitude }) => ({ identificadorMapa, nomePraca, latitude, longitude }));
     const resultado = (await noPortal((l) => window.__semParar.marcar(l), [lista])) ?? [];
     const semSentido = new Set(naRota.filter(p => p.semSentido).map(p => p.identificadorMapa));
+    const sentidoIncerto = new Set(naRota.filter(p => p.sentidoIncerto).map(p => p.identificadorMapa));
+    // Praça do mesmo sentido no mesmo trecho que ficou de fora (acesso, via paralela ou cadastro duplicado).
+    const alternativas = new Map(naRota.filter(p => p.alternativas?.length).map(p => [p.identificadorMapa, p.alternativas]));
     const ul = el('ul');
     for (const r of resultado) {
       const [icone, sufixo] = STATUS_PEDAGIO[r.status] ?? ['⚠️', ` — ${r.status}`];
-      const aviso = semSentido.has(r.identificadorMapa) ? ' — sem sentido no cadastro, confira' : '';
+      const aviso = semSentido.has(r.identificadorMapa) ? ' — sem sentido no cadastro, confira'
+        : sentidoIncerto.has(r.identificadorMapa) ? ' — o cadastro não deixa claro o sentido (ida ou volta): confira' : '';
       ul.append(el('li', `${icone} ${r.identificadorMapa} - ${r.nomePraca}${sufixo}${aviso}`, icone === '⚠️' || aviso ? 'alerta' : ''));
+      for (const a of alternativas.get(r.identificadorMapa) ?? []) {
+        ul.append(el('li', `⚠️ Não marquei ${a.identificadorMapa} - ${a.nomePraca}: fica no mesmo trecho, a ${Math.round(a.distanciaM)} m da rota (acesso, via paralela ou cadastro repetido). Confira se o motorista passa por ela.`, 'alerta'));
+      }
     }
     const marcadas = resultado.filter(r => r.status === 'ok' || r.status === 'ja_estava').length;
+    const conferir = resultado.length - marcadas + alternativas.size + resultado.filter(r => (r.status === 'ok' || r.status === 'ja_estava') && (sentidoIncerto.has(r.identificadorMapa) || semSentido.has(r.identificadorMapa))).length;
     caixa.replaceChildren(
       topo,
-      el('p', `${marcadas} de ${naRota.length} praças marcadas, na ordem do caminho.`),
+      el('p', `${marcadas} de ${naRota.length} praças marcadas, na ordem do caminho.${conferir ? ` ${conferir} para conferir (⚠️).` : ''}`),
       ul,
       el('p', 'Confira as praças no mapa do portal e clique em "Salvar rota". A extensão não salva.', 'nota'),
     );
