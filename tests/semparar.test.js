@@ -135,7 +135,34 @@ describe('instalarSemParar — marcar praças', () => {
     expect(textos(lista).filter(t => t.startsWith('207 -'))).toHaveLength(1);
   });
 
-  it('dois marcadores no mesmo ponto: não chuta, avisa para marcar à mão', async () => {
+  // Pronto com a lista de praças capturada (como no portal real, que busca a lista antes de desenhar).
+  async function prontoComLista() {
+    const pagina = montarPagina();
+    pagina.win.fetch = async () => new Response(JSON.stringify({ dados: PRACAS }), { status: 200 });
+    instalarSemParar(pagina.win);
+    await pagina.win.fetch(URL_PRACAS);
+    await new Promise(res => setTimeout(res, 0));
+    carregarGoogleMaps(pagina.win);
+    criarMarcadores(pagina.win, PRACAS, pagina.adicionarNaLista);
+    return pagina;
+  }
+
+  it('ida e volta no mesmo ponto: clica no marcador daquela praça (mesma ordem da lista do portal)', async () => {
+    const { win, lista } = await prontoComLista();
+    const r = await win.__semParar.marcar([PRACAS[4], PRACAS[3]]);
+    expect(r.map(x => [x.identificadorMapa, x.status])).toEqual([[876, 'ok'], [872, 'ok']]);
+    expect(textos(lista)).toEqual(['876 - PI397, KM25 + 650, SUL, URUÇUI', '872 - PI397, KM25 + 650, NORTE, URUÇUI']);
+  });
+
+  it('portal recriou os marcadores: usa os do mapa atual (os últimos)', async () => {
+    const { win, lista, adicionarNaLista } = await prontoComLista();
+    criarMarcadores(win, PRACAS, (p) => adicionarNaLista({ ...p, nomePraca: `${p.nomePraca} (novo)` }));
+    const r = await win.__semParar.marcar([PRACAS[3]]);
+    expect(r[0].status).toBe('ok');
+    expect(textos(lista)).toEqual(['872 - PI397, KM25 + 650, NORTE, URUÇUI (novo)']);
+  });
+
+  it('sem a lista do portal, dois marcadores no mesmo ponto: não chuta, avisa para marcar à mão', async () => {
     const { win, lista } = pronto();
     const r = await win.__semParar.marcar([PRACAS[3]]);
     expect(r[0].status).toBe('ambiguo');

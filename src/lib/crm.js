@@ -80,3 +80,37 @@ export async function salvarSessao(sessao, storage = chrome.storage.local) {
   if (sessao) await storage.set({ [CHAVE_SESSAO]: sessao });
   else await storage.remove(CHAVE_SESSAO);
 }
+
+// Motoristas salvos pelo botão "Cadastrar motorista" da Leitura de documentos do CRM (tabela motoristas_salvos).
+// Quem vê decide o RLS: admin e logística veem todos; os demais, só os que salvaram.
+export const COLUNAS_MOTORISTA_SALVO = 'id,nome,cpf,placas,leitura,mensagens,created_at,usado_em';
+export const MAXIMO_MOTORISTAS_SALVOS = 50;
+
+async function respostaDoCrm(r, oQue) {
+  if (r.status === 401) throw new ErroCrm('A sessão do CRM expirou. Entre de novo nas Configurações.', { sair: true });
+  if (!r.ok) throw new ErroCrm(`O CRM não respondeu ${oQue} (${r.status}).`);
+}
+
+export async function motoristasSalvos(sessao, { fetchFn = fetch } = {}) {
+  const params = new URLSearchParams({ select: COLUNAS_MOTORISTA_SALVO, order: 'created_at.desc', limit: String(MAXIMO_MOTORISTAS_SALVOS) });
+  const r = await chamar(`/rest/v1/motoristas_salvos?${params}`, { method: 'GET', headers: cabecalhos(sessao.access_token) }, fetchFn);
+  await respostaDoCrm(r, 'os motoristas salvos');
+  const lista = await r.json().catch(() => null);
+  if (!Array.isArray(lista)) throw new ErroCrm('O CRM respondeu num formato inesperado.');
+  return lista;
+}
+
+// Só a data de uso muda (o CRM não deixa alterar a leitura salva).
+export async function marcarMotoristaUsado(sessao, id, { fetchFn = fetch, agora = Date.now() } = {}) {
+  const r = await chamar(`/rest/v1/motoristas_salvos?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH', headers: { ...cabecalhos(sessao.access_token), Prefer: 'return=minimal' }, body: JSON.stringify({ usado_em: new Date(agora).toISOString() }),
+  }, fetchFn);
+  await respostaDoCrm(r, 'ao marcar o motorista como usado');
+}
+
+export async function excluirMotoristaSalvo(sessao, id, { fetchFn = fetch } = {}) {
+  const r = await chamar(`/rest/v1/motoristas_salvos?id=eq.${encodeURIComponent(id)}`, {
+    method: 'DELETE', headers: { ...cabecalhos(sessao.access_token), Prefer: 'return=minimal' },
+  }, fetchFn);
+  await respostaDoCrm(r, 'ao excluir o motorista salvo');
+}

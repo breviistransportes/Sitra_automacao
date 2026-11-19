@@ -101,25 +101,35 @@
       return Math.hypot(dLat, dLng);
     };
     const esperar = (ms) => new Promise((res) => win.setTimeout(res, ms));
+    const AMBIGUO = /* @__PURE__ */ Symbol("ambiguo");
+    function marcadorDa({ identificadorMapa: id, latitude, longitude }) {
+      const i = pracas.findIndex((p) => p?.identificadorMapa === id);
+      if (i >= 0 && marcadores.length >= pracas.length) {
+        const atual = marcadores[marcadores.length - pracas.length + i];
+        if (distanciaM(atual, latitude, longitude) <= MESMO_PONTO_M) return atual;
+      }
+      const perto = marcadores.filter((m) => distanciaM(m, latitude, longitude) <= MESMO_PONTO_M);
+      if (perto.length === 0) return null;
+      return perto.length === 1 ? perto[0] : AMBIGUO;
+    }
     async function marcar(lista, { esperaMs = 3e3 } = {}) {
       const resultado = [];
       for (const praca of lista) {
-        const { identificadorMapa: id, nomePraca, latitude, longitude } = praca;
+        const { identificadorMapa: id, nomePraca } = praca;
         const item = (status) => resultado.push({ identificadorMapa: id, nomePraca, status });
         if (selecionadas().has(id)) {
           item("ja_estava");
           continue;
         }
-        const perto = marcadores.filter((m) => distanciaM(m, latitude, longitude) <= MESMO_PONTO_M);
-        if (perto.length === 0) {
+        const marcador = marcadorDa(praca);
+        if (marcador === null) {
           item("sem_marcador");
           continue;
         }
-        if (perto.length > 1) {
+        if (marcador === AMBIGUO) {
           item("ambiguo");
           continue;
         }
-        const [marcador] = perto;
         win.google.maps.event.trigger(marcador, "click", { latLng: marcador.getPosition(), stop() {
         } });
         let entrou = selecionadas().has(id);

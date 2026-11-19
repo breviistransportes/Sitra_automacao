@@ -238,17 +238,18 @@ legend { padding: 0 4px; font-size: 11px; font-weight: 700; letter-spacing: .06e
 
 /* Histórico de cadastros */
 .historico-info { margin: 0; color: var(--muted); font-size: 12.5px; }
-#lista-historico { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-#lista-historico:empty { display: none; }
-#lista-historico li {
+#lista-historico, #lista-salvos { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+#lista-historico:empty, #lista-salvos:empty { display: none; }
+#lista-historico li, #lista-salvos li {
   display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px;
   padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
-#lista-historico .registro { min-width: 0; display: grid; gap: 2px; }
-#lista-historico .registro strong { font-size: 13px; overflow-wrap: anywhere; }
-#lista-historico .registro small { color: var(--muted); font-size: 11.5px; overflow-wrap: anywhere; }
-#lista-historico button { min-height: 28px; padding: 0 10px; font-size: 12px; }
+#lista-historico .registro, #lista-salvos .registro { min-width: 0; display: grid; gap: 2px; }
+#lista-historico .registro strong, #lista-salvos .registro strong { font-size: 13px; overflow-wrap: anywhere; }
+#lista-historico .registro small, #lista-salvos .registro small { color: var(--muted); font-size: 11.5px; overflow-wrap: anywhere; }
+#lista-historico button, #lista-salvos button { min-height: 28px; padding: 0 10px; font-size: 12px; }
 #btn-historico-apagar.confirmar { color: var(--error-text); background: var(--error-bg); }
+#lista-salvos button.confirmar { color: var(--error-text); background: var(--error-bg); }
 
 /* CRM: login nas configurações e quadro de cruzamento na conferência */
 .crm-bloco { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
@@ -290,3 +291,12 @@ legend { padding: 0 4px; font-size: 11px; font-weight: 700; letter-spacing: .06e
   border-radius: var(--radius-sm); cursor: pointer;
 }
 .botao-arquivo:hover { background: var(--surface-2); }
+
+/* Sem chave do Gemini a leitura é no CRM: esconde a leitura local e o botão do CRM vira o principal. */
+.sem-gemini .so-gemini { display: none !important; }
+#btn-ler-crm { width: 100%; margin-top: 8px; }
+.sem-gemini #btn-ler-crm { min-height: 40px; margin-top: 0; color: var(--on-accent); background: var(--accent); border-color: transparent; }
+.sem-gemini #btn-ler-crm:hover { background: var(--accent-hover); }
+#btn-antt-crm { margin-top: 4px; }
+
+#lista-salvos .usado { color: var(--muted); font-size: 11px; }

@@ -107,16 +107,31 @@ export function instalarSemParar(win) {
 
   const esperar = (ms) => new Promise(res => win.setTimeout(res, ms));
 
+  // O portal cria um marcador por praça, na ordem da lista de praca/listar/ativas (conferido no portal real:
+  // 986 de 986). Então a praça N é o marcador N — isso separa ida e volta gravadas no mesmo ponto.
+  // Se a ordem não bater (posição longe), cai na busca por proximidade, que não chuta entre dois iguais.
+  const AMBIGUO = Symbol('ambiguo');
+  function marcadorDa({ identificadorMapa: id, latitude, longitude }) {
+    const i = pracas.findIndex(p => p?.identificadorMapa === id);
+    if (i >= 0 && marcadores.length >= pracas.length) {
+      // Se o portal recriar os marcadores, os do mapa atual são os últimos.
+      const atual = marcadores[marcadores.length - pracas.length + i];
+      if (distanciaM(atual, latitude, longitude) <= MESMO_PONTO_M) return atual;
+    }
+    const perto = marcadores.filter(m => distanciaM(m, latitude, longitude) <= MESMO_PONTO_M);
+    if (perto.length === 0) return null;
+    return perto.length === 1 ? perto[0] : AMBIGUO;
+  }
+
   async function marcar(lista, { esperaMs = 3000 } = {}) {
     const resultado = [];
     for (const praca of lista) {
-      const { identificadorMapa: id, nomePraca, latitude, longitude } = praca;
+      const { identificadorMapa: id, nomePraca } = praca;
       const item = (status) => resultado.push({ identificadorMapa: id, nomePraca, status });
       if (selecionadas().has(id)) { item('ja_estava'); continue; }
-      const perto = marcadores.filter(m => distanciaM(m, latitude, longitude) <= MESMO_PONTO_M);
-      if (perto.length === 0) { item('sem_marcador'); continue; }
-      if (perto.length > 1) { item('ambiguo'); continue; }
-      const [marcador] = perto;
+      const marcador = marcadorDa(praca);
+      if (marcador === null) { item('sem_marcador'); continue; }
+      if (marcador === AMBIGUO) { item('ambiguo'); continue; }
       win.google.maps.event.trigger(marcador, 'click', { latLng: marcador.getPosition(), stop() {} });
       let entrou = selecionadas().has(id);
       for (let t = 0; !entrou && t < esperaMs; t += 50) {

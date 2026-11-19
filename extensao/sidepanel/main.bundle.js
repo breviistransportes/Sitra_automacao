@@ -3082,7 +3082,7 @@ function montarSchema() {
     required: ["valor", "certeza", "fonte"],
     additionalProperties: false
   };
-  const objeto = (campos) => {
+  const objeto2 = (campos) => {
     const daIa = campos.filter((c) => c.ia);
     return {
       type: "object",
@@ -3094,9 +3094,9 @@ function montarSchema() {
   return {
     type: "object",
     properties: {
-      campos: objeto(CAMPOS_GERAIS),
+      campos: objeto2(CAMPOS_GERAIS),
       // Um item por CRV/CRLV: cavalo e carreta são dois cadastros de veículo no Sitra.
-      veiculos: { type: "array", items: objeto(CAMPOS_VEICULO) },
+      veiculos: { type: "array", items: objeto2(CAMPOS_VEICULO) },
       documentos_encontrados: { type: "array", items: { type: "string" } },
       avisos: { type: "array", items: { type: "string" } }
     },
@@ -31377,6 +31377,35 @@ async function salvarSessao(sessao, storage = chrome.storage.local) {
   if (sessao) await storage.set({ [CHAVE_SESSAO]: sessao });
   else await storage.remove(CHAVE_SESSAO);
 }
+var COLUNAS_MOTORISTA_SALVO = "id,nome,cpf,placas,leitura,mensagens,created_at,usado_em";
+var MAXIMO_MOTORISTAS_SALVOS = 50;
+async function respostaDoCrm(r, oQue) {
+  if (r.status === 401) throw new ErroCrm("A sess\xE3o do CRM expirou. Entre de novo nas Configura\xE7\xF5es.", { sair: true });
+  if (!r.ok) throw new ErroCrm(`O CRM n\xE3o respondeu ${oQue} (${r.status}).`);
+}
+async function motoristasSalvos(sessao, { fetchFn = fetch } = {}) {
+  const params = new URLSearchParams({ select: COLUNAS_MOTORISTA_SALVO, order: "created_at.desc", limit: String(MAXIMO_MOTORISTAS_SALVOS) });
+  const r = await chamar(`/rest/v1/motoristas_salvos?${params}`, { method: "GET", headers: cabecalhos(sessao.access_token) }, fetchFn);
+  await respostaDoCrm(r, "os motoristas salvos");
+  const lista2 = await r.json().catch(() => null);
+  if (!Array.isArray(lista2)) throw new ErroCrm("O CRM respondeu num formato inesperado.");
+  return lista2;
+}
+async function marcarMotoristaUsado(sessao, id, { fetchFn = fetch, agora = Date.now() } = {}) {
+  const r = await chamar(`/rest/v1/motoristas_salvos?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { ...cabecalhos(sessao.access_token), Prefer: "return=minimal" },
+    body: JSON.stringify({ usado_em: new Date(agora).toISOString() })
+  }, fetchFn);
+  await respostaDoCrm(r, "ao marcar o motorista como usado");
+}
+async function excluirMotoristaSalvo(sessao, id, { fetchFn = fetch } = {}) {
+  const r = await chamar(`/rest/v1/motoristas_salvos?id=eq.${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { ...cabecalhos(sessao.access_token), Prefer: "return=minimal" }
+  }, fetchFn);
+  await respostaDoCrm(r, "ao excluir o motorista salvo");
+}
 
 // src/lib/cruzamento.js
 var alfanum2 = (s) => String(s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -31640,6 +31669,13 @@ async function buscarTrajeto(link, chave, fetchFn = fetch) {
 var RUMO = { n: 0, ne: 45, e: 90, se: 135, s: 180, so: 225, o: 270, no: 315 };
 var M_POR_GRAU_LAT = 110540;
 var M_POR_GRAU_LNG = 111320;
+var RAIO_M = 500;
+var RAIO_COM_PAR_M = 1e3;
+var TOLERANCIA_GRAUS = 85;
+var TOLERANCIA_LONGE_GRAUS = 45;
+var PAR_ATE_M = 1500;
+var CONTRAMAO_GRAUS = 150;
+var MESMO_TRECHO_KM = 2;
 function diferencaDeRumo(a, b) {
   const d = Math.abs(a - b) % 360;
   return d > 180 ? 360 - d : d;
@@ -31647,12 +31683,29 @@ function diferencaDeRumo(a, b) {
 function plano(lat, lng, lat0, lng0) {
   return [(lng - lng0) * M_POR_GRAU_LNG * Math.cos(lat0 * Math.PI / 180), (lat - lat0) * M_POR_GRAU_LAT];
 }
+function distanciaM(a, b) {
+  const [x, y] = plano(b.latitude, b.longitude, a.latitude, a.longitude);
+  return Math.hypot(x, y);
+}
 function comprimentoM([lat1, lng1], [lat2, lng2]) {
   const [x, y] = plano(lat2, lng2, lat1, lng1);
   return Math.hypot(x, y);
 }
-function pracasNaRota(trajeto, pracas, { raioM = 500, toleranciaGraus = 60 } = {}) {
-  if (trajeto.length < 2) return [];
+var rumoDa = (praca) => RUMO[String(praca.direcao ?? "").trim().toLowerCase()];
+var EMPATE_GRAUS = 30;
+function palavraDeSentido(praca) {
+  const achadas = [...String(praca?.nomePraca ?? "").toUpperCase().matchAll(/\b(NORTE|SUL|LESTE|OESTE)\b/g)].map((m) => m[1]);
+  return new Set(achadas).size === 1 ? achadas[0] : null;
+}
+function rodoviaDa(praca) {
+  for (const texto of [praca?.nomePraca, praca?.nomeRodovia]) {
+    const m = String(texto ?? "").toUpperCase().match(/\b([A-Z]{2,3})[\s-]*(\d{3})\b/);
+    if (m) return `${m[1]}${m[2]}`;
+  }
+  return null;
+}
+var temCoordenada = (p) => Number.isFinite(p?.latitude) && Number.isFinite(p?.longitude);
+function projetar(trajeto, pracas, raioM) {
   const inicioM = [0];
   for (let i = 1; i < trajeto.length; i++) inicioM.push(inicioM[i - 1] + comprimentoM(trajeto[i - 1], trajeto[i]));
   const folgaGraus = raioM / M_POR_GRAU_LAT * 1.5;
@@ -31666,10 +31719,10 @@ function pracasNaRota(trajeto, pracas, { raioM = 500, toleranciaGraus = 60 } = {
     caixa[i * 4 + 2] = Math.min(aLng, bLng) - folgaGraus;
     caixa[i * 4 + 3] = Math.max(aLng, bLng) + folgaGraus;
   }
-  const achadas = [];
+  const perto = /* @__PURE__ */ new Map();
   for (const praca of pracas) {
+    if (!temCoordenada(praca)) continue;
     const { latitude: lat, longitude: lng } = praca;
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
     let melhor = null;
     for (let i = 0; i < n; i++) {
       const k = i * 4;
@@ -31682,18 +31735,101 @@ function pracasNaRota(trajeto, pracas, { raioM = 500, toleranciaGraus = 60 } = {
       const tam2 = dx * dx + dy * dy;
       if (tam2 === 0) continue;
       const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / tam2));
-      const distanciaM = Math.hypot(ax + t * dx, ay + t * dy);
-      if (distanciaM > raioM || melhor && distanciaM >= melhor.distanciaM) continue;
-      const rumo = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
-      melhor = { distanciaM, rumo, posicaoM: inicioM[i] + t * Math.sqrt(tam2) };
+      const d = Math.hypot(ax + t * dx, ay + t * dy);
+      if (d > raioM || melhor && d >= melhor.distanciaM) continue;
+      melhor = { distanciaM: d, rumo: (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360, posicaoM: inicioM[i] + t * Math.sqrt(tam2) };
     }
-    if (!melhor) continue;
-    const rumoPraca = RUMO[String(praca.direcao ?? "").trim().toLowerCase()];
-    const semSentido = rumoPraca === void 0;
-    if (!semSentido && diferencaDeRumo(rumoPraca, melhor.rumo) > toleranciaGraus) continue;
-    achadas.push({ ...praca, distanciaM: melhor.distanciaM, kmNaRota: melhor.posicaoM / 1e3, ...semSentido ? { semSentido } : {} });
+    if (melhor) perto.set(praca, melhor);
   }
-  return achadas.sort((a, b) => a.kmNaRota - b.kmNaRota);
+  return perto;
+}
+function parDe(praca, pracas) {
+  const rumo = rumoDa(praca);
+  let par = null;
+  for (const q of pracas) {
+    if (q === praca || !temCoordenada(q)) continue;
+    const mesmoLink = praca.maplinkId != null && praca.maplinkId !== "" && q.maplinkId === praca.maplinkId;
+    const rumoQ = rumoDa(q);
+    const oposto = rumo !== void 0 && rumoQ !== void 0 && diferencaDeRumo(rumo, rumoQ) >= 135;
+    if (!mesmoLink && !oposto) continue;
+    const d = distanciaM(praca, q);
+    if (d <= PAR_ATE_M && (!par || d < par.d)) par = { praca: q, d };
+  }
+  return par?.praca ?? null;
+}
+function pracasNaRota(trajeto, pracas, { raioM = RAIO_M, toleranciaGraus = TOLERANCIA_GRAUS } = {}) {
+  if (!Array.isArray(trajeto) || trajeto.length < 2) return [];
+  const perto = projetar(trajeto, pracas, Math.max(raioM, RAIO_COM_PAR_M));
+  const cache = /* @__PURE__ */ new Map();
+  const par = (p) => {
+    if (!cache.has(p)) cache.set(p, parDe(p, pracas));
+    return cache.get(p);
+  };
+  const escolhidas = [];
+  for (const [praca, g] of perto) {
+    const rumoPraca = rumoDa(praca);
+    const semSentido = rumoPraca === void 0;
+    const diferenca = semSentido ? 0 : diferencaDeRumo(rumoPraca, g.rumo);
+    const seuPar = par(praca);
+    const gPar = seuPar && perto.get(seuPar);
+    const pertoDoCaminho = g.distanciaM <= raioM || !semSentido && gPar && gPar.distanciaM <= raioM && diferenca <= TOLERANCIA_LONGE_GRAUS;
+    if (!pertoDoCaminho) continue;
+    if (!semSentido) {
+      const rumoPar = seuPar ? rumoDa(seuPar) : void 0;
+      if (rumoPar !== void 0) {
+        const diferencaPar = diferencaDeRumo(rumoPar, g.rumo);
+        if (diferenca > diferencaPar || diferenca === diferencaPar && praca.identificadorMapa > seuPar.identificadorMapa) continue;
+        if (diferencaPar - diferenca < EMPATE_GRAUS) {
+          if (diferenca > toleranciaGraus) continue;
+          escolhidas.push({ praca, g, semSentido, incerto: seuPar });
+          continue;
+        }
+        if (diferenca > toleranciaGraus && diferencaPar < CONTRAMAO_GRAUS) continue;
+      } else if (diferenca > toleranciaGraus) {
+        continue;
+      }
+    }
+    escolhidas.push({ praca, g, semSentido });
+  }
+  for (const e of escolhidas.filter((x) => x.incerto)) {
+    const seuPar = e.incerto;
+    const palavras = [palavraDeSentido(e.praca), palavraDeSentido(seuPar)];
+    const via = rodoviaDa(e.praca);
+    const vizinha = escolhidas.filter((x) => !x.incerto && via && rodoviaDa(x.praca) === via && palavras.includes(palavraDeSentido(x.praca))).sort((a, b) => Math.abs(a.g.posicaoM - e.g.posicaoM) - Math.abs(b.g.posicaoM - e.g.posicaoM))[0];
+    if (!vizinha || !palavras[0] || !palavras[1] || palavras[0] === palavras[1]) {
+      e.sentidoIncerto = true;
+      continue;
+    }
+    if (palavraDeSentido(vizinha.praca) === palavras[1]) {
+      e.praca = seuPar;
+      e.g = perto.get(seuPar) ?? e.g;
+    }
+  }
+  for (const e of escolhidas) delete e.incerto;
+  escolhidas.sort((a, b) => a.g.posicaoM - b.g.posicaoM);
+  const finais = [];
+  for (const atual of escolhidas) {
+    const anterior = finais[finais.length - 1];
+    if (anterior && (atual.g.posicaoM - anterior.g.posicaoM) / 1e3 < MESMO_TRECHO_KM && par(atual.praca) !== anterior.praca) {
+      const [fica, sai] = atual.g.distanciaM < anterior.g.distanciaM ? [atual, anterior] : [anterior, atual];
+      fica.alternativas = [...fica.alternativas ?? [], ...sai.alternativas ?? [], sai];
+      delete sai.alternativas;
+      finais[finais.length - 1] = fica;
+      continue;
+    }
+    finais.push(atual);
+  }
+  const saida = ({ praca, g, semSentido, sentidoIncerto }) => ({
+    ...praca,
+    distanciaM: g.distanciaM,
+    kmNaRota: g.posicaoM / 1e3,
+    ...semSentido ? { semSentido } : {},
+    ...sentidoIncerto ? { sentidoIncerto } : {}
+  });
+  return finais.map((e) => ({
+    ...saida(e),
+    ...e.alternativas?.length ? { alternativas: e.alternativas.map(saida) } : {}
+  }));
 }
 function ehSemParar(url) {
   try {
@@ -31902,12 +32038,24 @@ function posProcessarAntt(bruto) {
 }
 
 // src/lib/leitura-crm.js
+var ORIGENS_CRM = ["https://breviisia-crm.w7mwle.easypanel.host"];
 var CHAVE_LEITURA_CRM = "leituraCrm";
+var PAGINA_LEITURA_CRM = `${ORIGENS_CRM[0]}/leitura-documentos`;
 var campoValido = (c) => c && typeof c === "object" && typeof c.valor === "string";
-var camposValidos = (o) => o && typeof o === "object" && !Array.isArray(o) && Object.values(o).every(campoValido);
+var listaValida = (c) => c && typeof c === "object" && Array.isArray(c.valor) && c.valor.every((v) => typeof v === "string");
+var objeto = (o) => Boolean(o) && typeof o === "object" && !Array.isArray(o);
+var camposValidos = (o) => objeto(o) && Object.values(o).every(campoValido);
 var textos = (a) => Array.isArray(a) && a.every((t) => typeof t === "string");
-function leituraCrmValida(l) {
-  return Boolean(l) && camposValidos(l.campos) && Array.isArray(l.veiculos) && l.veiculos.every(camposValidos) && textos(l.documentos_encontrados) && textos(l.avisos);
+function leituraCrmValida(l, documento = "cadastro") {
+  if (!l || typeof l !== "object") return false;
+  if (documento === "cadastro") {
+    return camposValidos(l.campos) && Array.isArray(l.veiculos) && l.veiculos.every(camposValidos) && textos(l.documentos_encontrados) && textos(l.avisos);
+  }
+  if (documento === "cte") {
+    return objeto(l.campos) && Object.entries(l.campos).every(([k, c]) => k === "cfops" || k === "outros_cnpjs" ? listaValida(c) : campoValido(c)) && textos(l.documentos_encontrados) && textos(l.avisos);
+  }
+  if (documento === "antt") return typeof l.cpf_cnpj === "string" && typeof l.rntrc === "string" && typeof l.encontrou_antt === "boolean";
+  return false;
 }
 
 // src/sidepanel/main.js
@@ -31964,7 +32112,7 @@ async function lerDocumentos() {
   mensagem("");
   const cfg = await lerConfig();
   if (!cfg.apiKey) {
-    await abrirConfig("Cole a chave da API do Gemini e clique em Salvar.");
+    abrirLeituraNoCrm();
     return;
   }
   mostrar("lendo");
@@ -31980,15 +32128,7 @@ async function lerDocumentos() {
       throw new Error(["Nenhuma foto/PDF encontrada e nenhuma mensagem colada.", ...avisosEntrada].join(" "));
     }
     if (modo === "cte") {
-      const r = posProcessarCte(await chamarGeminiCte(cfg.apiKey, docs));
-      $("form-conferencia").innerHTML = montarFormularioCte(r.valores);
-      const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(", ")}`] : [];
-      preencherLista($("avisos"), [...docsLidos, ...avisosEntrada, ...r.avisos]);
-      await salvarUltimoCte(lerFormularioCte($("form-conferencia")).valores).catch(() => {
-      });
-      confirmarSobrescrita = false;
-      mostrar("conferencia");
-      mostrarMotoristaCte();
+      await exibirCte(await chamarGeminiCte(cfg.apiKey, docs), avisosEntrada);
       return;
     }
     const textoConfiavel = [docs.mensagens ?? "", ...docs.textos.map((t) => t.conteudo)].join("\n");
@@ -32019,17 +32159,44 @@ async function exibirCadastro(bruto, cfg, contexto, avisosEntrada = []) {
   confirmarSobrescrita = false;
   mostrar("conferencia");
 }
+async function exibirCte(bruto, avisosEntrada = []) {
+  const r = posProcessarCte(bruto);
+  $("form-conferencia").innerHTML = montarFormularioCte(r.valores);
+  const docsLidos = r.documentos.length ? [`Documentos lidos: ${r.documentos.join(", ")}`] : [];
+  preencherLista($("avisos"), [...docsLidos, ...avisosEntrada, ...r.avisos]);
+  await salvarUltimoCte(lerFormularioCte($("form-conferencia")).valores).catch(() => {
+  });
+  confirmarSobrescrita = false;
+  mostrar("conferencia");
+  mostrarMotoristaCte();
+}
+function aplicarAntt(r, origem) {
+  if (r.cpf_cnpj) $("ciot-contratado-doc").value = r.cpf_cnpj;
+  if (r.rntrc) $("ciot-contratado-rntrc").value = r.rntrc;
+  $("ciot-contratado-origem").textContent = [origem, ...r.avisos].join(" ");
+}
+function abrirLeituraNoCrm(documento = modo === "cte" ? "cte" : modo === "ciot" ? "antt" : "cadastro") {
+  chrome.tabs.create({ url: `${PAGINA_LEITURA_CRM}?documento=${documento}` });
+}
 async function importarLeituraDoCrm() {
   const { [CHAVE_LEITURA_CRM]: pendente } = await chrome.storage.session.get(CHAVE_LEITURA_CRM);
   if (!pendente) return;
   await chrome.storage.session.remove(CHAVE_LEITURA_CRM);
-  if (!leituraCrmValida(pendente.leitura)) {
+  const documento = pendente.documento ?? "cadastro";
+  if (!leituraCrmValida(pendente.leitura, documento)) {
     mensagem("A leitura recebida do CRM veio num formato inesperado.");
     return;
   }
-  aplicarModo("cadastro");
-  const cfg = await lerConfig();
-  await exibirCadastro(pendente.leitura, cfg, { textoConfiavel: pendente.mensagens ?? "" }, ["Leitura feita no CRM (Leitura de documentos)."]);
+  if (documento === "antt") {
+    await aplicarModo("ciot");
+    aplicarAntt(posProcessarAntt(pendente.leitura), "Lido do cart\xE3o da ANTT no CRM.");
+    mensagem("Cart\xE3o da ANTT lido no CRM: confira o contratado antes de preencher.", "alerta");
+    return;
+  }
+  const aviso = ["Leitura feita no CRM (Leitura de documentos)."];
+  aplicarModo(documento === "cte" ? "cte" : "cadastro", { restaurar: false });
+  if (documento === "cte") await exibirCte(pendente.leitura, aviso);
+  else await exibirCadastro(pendente.leitura, await lerConfig(), { textoConfiavel: pendente.mensagens ?? "" }, aviso);
   mensagem("Leitura do CRM carregada: confira os campos antes de preencher.", "alerta");
 }
 async function executarNoSitra(func, args = []) {
@@ -32153,11 +32320,53 @@ function recomecar() {
   mostrar(modo === "pedagios" ? "pedagios" : modo === "ciot" ? "ciot" : "entrada");
   if (modo === "ciot") {
     $("ciot-data-fim").value = "";
-    carregarCiot();
+    return carregarCiot();
   }
+  return void 0;
 }
-function aplicarModo(novoModo) {
+var telasGuardadas = {};
+var etapaVisivel = () => document.querySelector("section[data-etapa]:not([hidden])")?.dataset.etapa;
+function guardarTela() {
+  const etapa = etapaVisivel();
+  if (!["cadastro", "cte"].includes(modo) || !["conferencia", "resultado"].includes(etapa)) return;
+  const tirar = (id) => {
+    const f = document.createDocumentFragment();
+    f.append(...$(id).childNodes);
+    return f;
+  };
+  telasGuardadas[modo] = {
+    etapa,
+    registroAtual,
+    titulo: $("resultado-titulo").textContent,
+    form: tirar("form-conferencia"),
+    avisos: tirar("avisos"),
+    relatorio: tirar("relatorio")
+  };
+}
+function restaurarTela() {
+  const t = telasGuardadas[modo];
+  if (!t) return false;
+  delete telasGuardadas[modo];
+  arquivos = [];
+  listarArquivos();
+  $("form-conferencia").replaceChildren(t.form);
+  $("avisos").replaceChildren(t.avisos);
+  $("relatorio").replaceChildren(t.relatorio);
+  $("resultado-titulo").textContent = t.titulo;
+  registroAtual = t.registroAtual;
+  confirmarSobrescrita = false;
+  mensagem("");
+  atualizarBotaoHistorico();
+  $("resultado-pedagios").hidden = true;
+  mostrar(t.etapa);
+  if (modo === "cte") mostrarMotoristaCte();
+  else mostrarCruzamento();
+  return true;
+}
+function aplicarModo(novoModo, { restaurar = true } = {}) {
+  guardarTela();
   modo = ["cte", "pedagios", "ciot"].includes(novoModo) ? novoModo : "cadastro";
+  if (!restaurar) delete telasGuardadas[modo];
   for (const botao of document.querySelectorAll("[data-modo]")) {
     const ativo = botao.dataset.modo === modo;
     botao.classList.toggle("ativo", ativo);
@@ -32174,7 +32383,10 @@ function aplicarModo(novoModo) {
   $("instrucao-preenchimento").textContent = cte ? "No Sitra, abra Digita\xE7\xE3o de CT-e e escolha o Tipo de Frete antes de preencher." : 'Ordem no Sitra: Propriet\xE1rio \u2192 Ve\xEDculo (um cadastro por placa: cavalo e carreta) \u2192 Motorista. Abra a tela e clique em "Preencher".';
   $("btn-preencher").textContent = cte ? "Preencher CT-e" : "Preencher no Sitra";
   $("btn-novo").textContent = ciot ? "Pr\xF3ximo CIOT" : cte ? "Pr\xF3ximo CT-e" : "Pr\xF3ximo motorista";
-  recomecar();
+  $("btn-ler-crm").textContent = cte ? "Ler a nota no CRM" : "Ler os documentos no CRM";
+  $("btn-salvos").hidden = cte;
+  if (restaurarTela()) return void 0;
+  return recomecar();
 }
 $("zona").addEventListener("dragover", (e) => {
   e.preventDefault();
@@ -32197,7 +32409,12 @@ $("zona").addEventListener("keydown", (e) => {
   }
 });
 $("btn-ler").addEventListener("click", lerDocumentos);
+$("btn-ler-crm").addEventListener("click", () => abrirLeituraNoCrm());
+$("btn-antt-crm").addEventListener("click", () => abrirLeituraNoCrm("antt"));
 $("btn-historico").addEventListener("click", abrirHistorico);
+$("btn-salvos").addEventListener("click", abrirSalvos);
+$("btn-salvos-voltar").addEventListener("click", recomecar);
+$("btn-salvos-atualizar").addEventListener("click", abrirSalvos);
 $("crm-entrar").addEventListener("click", entrarNoCrm);
 $("crm-sair").addEventListener("click", sairDoCrm);
 $("btn-historico-voltar").addEventListener("click", recomecar);
@@ -32297,6 +32514,87 @@ async function abrirHistorico() {
   $("btn-historico-apagar").classList.remove("confirmar");
   $("btn-historico-apagar").textContent = "Apagar tudo";
   mostrar("historico");
+}
+var dataCurta = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+};
+async function abrirSalvos() {
+  mensagem("");
+  let sessao;
+  try {
+    sessao = await sessaoDoCrm();
+  } catch (e) {
+    mensagem(e.message);
+    return;
+  }
+  if (!sessao) {
+    abrirConfig("Entre com o seu login do CRM para ver os motoristas salvos.");
+    return;
+  }
+  $("btn-salvos").disabled = true;
+  let lista2;
+  try {
+    lista2 = await motoristasSalvos(sessao);
+  } catch (e) {
+    if (e.sair) await salvarSessao(null).catch(() => {
+    });
+    mensagem(e.message);
+    return;
+  } finally {
+    $("btn-salvos").disabled = false;
+  }
+  const ul = $("lista-salvos");
+  ul.innerHTML = "";
+  for (const m of lista2) {
+    const li = document.createElement("li");
+    const info2 = document.createElement("div");
+    info2.className = "registro";
+    const titulo = document.createElement("strong");
+    titulo.textContent = m.nome || "(sem nome)";
+    const detalhe = document.createElement("small");
+    detalhe.textContent = [dataCurta(m.created_at), m.cpf && `CPF ${m.cpf}`, (m.placas ?? []).join(", ")].filter(Boolean).join(" \xB7 ");
+    info2.append(titulo, detalhe);
+    if (m.usado_em) {
+      const usado = document.createElement("small");
+      usado.className = "usado";
+      usado.textContent = `J\xE1 usado em ${dataCurta(m.usado_em)}`;
+      info2.append(usado);
+    }
+    const usar = document.createElement("button");
+    usar.textContent = "Usar";
+    usar.onclick = () => usarSalvo(m, sessao);
+    const excluir = document.createElement("button");
+    excluir.textContent = "Excluir";
+    excluir.className = "secundario";
+    excluir.onclick = async () => {
+      if (!excluir.classList.contains("confirmar")) {
+        excluir.classList.add("confirmar");
+        excluir.textContent = "Confirmar";
+        return;
+      }
+      try {
+        await excluirMotoristaSalvo(sessao, m.id);
+        abrirSalvos();
+      } catch (e) {
+        mensagem(e.message);
+      }
+    };
+    li.append(info2, usar, excluir);
+    ul.append(li);
+  }
+  $("salvos-vazio").hidden = lista2.length > 0;
+  mostrar("salvos");
+}
+async function usarSalvo(m, sessao) {
+  if (!leituraCrmValida(m.leitura, "cadastro")) {
+    mensagem("Esse motorista salvo est\xE1 num formato que a extens\xE3o n\xE3o reconhece.");
+    return;
+  }
+  await exibirCadastro(m.leitura, await lerConfig(), { textoConfiavel: m.mensagens ?? "" }, [`Motorista salvo no CRM em ${dataCurta(m.created_at)}.`]);
+  mensagem('Motorista salvo carregado: confira os campos e clique em "Preencher no Sitra".', "alerta");
+  marcarMotoristaUsado(sessao, m.id).catch(() => {
+  });
 }
 function abrirRegistro(r) {
   $("form-conferencia").innerHTML = montarFormulario(r.valores ?? {}, r.veiculos ?? []);
@@ -32560,16 +32858,22 @@ async function marcarPedagios() {
     const lista2 = naRota.map(({ identificadorMapa, nomePraca, latitude, longitude }) => ({ identificadorMapa, nomePraca, latitude, longitude }));
     const resultado = await noPortal((l) => window.__semParar.marcar(l), [lista2]) ?? [];
     const semSentido = new Set(naRota.filter((p) => p.semSentido).map((p) => p.identificadorMapa));
+    const sentidoIncerto = new Set(naRota.filter((p) => p.sentidoIncerto).map((p) => p.identificadorMapa));
+    const alternativas = new Map(naRota.filter((p) => p.alternativas?.length).map((p) => [p.identificadorMapa, p.alternativas]));
     const ul = el("ul");
     for (const r of resultado) {
       const [icone, sufixo] = STATUS_PEDAGIO[r.status] ?? ["\u26A0\uFE0F", ` \u2014 ${r.status}`];
-      const aviso = semSentido.has(r.identificadorMapa) ? " \u2014 sem sentido no cadastro, confira" : "";
+      const aviso = semSentido.has(r.identificadorMapa) ? " \u2014 sem sentido no cadastro, confira" : sentidoIncerto.has(r.identificadorMapa) ? " \u2014 o cadastro n\xE3o deixa claro o sentido (ida ou volta): confira" : "";
       ul.append(el("li", `${icone} ${r.identificadorMapa} - ${r.nomePraca}${sufixo}${aviso}`, icone === "\u26A0\uFE0F" || aviso ? "alerta" : ""));
+      for (const a of alternativas.get(r.identificadorMapa) ?? []) {
+        ul.append(el("li", `\u26A0\uFE0F N\xE3o marquei ${a.identificadorMapa} - ${a.nomePraca}: fica no mesmo trecho, a ${Math.round(a.distanciaM)} m da rota (acesso, via paralela ou cadastro repetido). Confira se o motorista passa por ela.`, "alerta"));
+      }
     }
     const marcadas = resultado.filter((r) => r.status === "ok" || r.status === "ja_estava").length;
+    const conferir = resultado.length - marcadas + alternativas.size + resultado.filter((r) => (r.status === "ok" || r.status === "ja_estava") && (sentidoIncerto.has(r.identificadorMapa) || semSentido.has(r.identificadorMapa))).length;
     caixa.replaceChildren(
       topo,
-      el("p", `${marcadas} de ${naRota.length} pra\xE7as marcadas, na ordem do caminho.`),
+      el("p", `${marcadas} de ${naRota.length} pra\xE7as marcadas, na ordem do caminho.${conferir ? ` ${conferir} para conferir (\u26A0\uFE0F).` : ""}`),
       ul,
       el("p", 'Confira as pra\xE7as no mapa do portal e clique em "Salvar rota". A extens\xE3o n\xE3o salva.', "nota")
     );
@@ -32685,7 +32989,7 @@ async function lerCartaoAntt(arquivo) {
   mensagem("");
   const cfg = await lerConfig();
   if (!cfg.apiKey) {
-    await abrirConfig("Cole a chave da API do Gemini e clique em Salvar.");
+    abrirLeituraNoCrm("antt");
     return;
   }
   $("ciot-contratado-origem").textContent = "Lendo o cart\xE3o da ANTT\u2026";
@@ -32693,10 +32997,7 @@ async function lerCartaoAntt(arquivo) {
     const entrada = await lerEntrada([arquivo]);
     const docs = await prepararDocumentos(entrada.itens, { redimensionar: redimensionarImagem, lerTextoPdf: textoDoPdf });
     if (!temConteudo(docs, "")) throw new Error("Arquivo n\xE3o suportado: use foto (JPG/PNG) ou PDF do cart\xE3o da ANTT.");
-    const r = posProcessarAntt(await chamarGeminiAntt(cfg.apiKey, docs));
-    if (r.cpf_cnpj) $("ciot-contratado-doc").value = r.cpf_cnpj;
-    if (r.rntrc) $("ciot-contratado-rntrc").value = r.rntrc;
-    $("ciot-contratado-origem").textContent = ["Lido do cart\xE3o da ANTT.", ...r.avisos].join(" ");
+    aplicarAntt(posProcessarAntt(await chamarGeminiAntt(cfg.apiKey, docs)), "Lido do cart\xE3o da ANTT.");
   } catch (e) {
     $("ciot-contratado-origem").textContent = "";
     mensagem(e.message);
@@ -32788,10 +33089,6 @@ async function abrirConfig(aviso = "") {
 }
 async function salvarConfigPainel() {
   const apiKey = $("cfg-apiKey").value.trim();
-  if (!apiKey) {
-    mensagem("Cole a chave da API do Gemini.");
-    return;
-  }
   await salvarConfig({
     apiKey,
     mapsKey: $("cfg-mapsKey").value.trim(),
@@ -32803,16 +33100,17 @@ async function salvarConfigPainel() {
     }
   });
   $("config").hidden = true;
+  mostrarLeituraLocal(apiKey);
   mensagem("Configura\xE7\xF5es salvas.", "alerta");
+}
+function mostrarLeituraLocal(apiKey) {
+  document.body.classList.toggle("sem-gemini", !apiKey);
 }
 importarLeituraDoCrm().catch((e) => mensagem(e.message));
 chrome.storage.onChanged.addListener((mudou, area) => {
   if (area === "session" && mudou[CHAVE_LEITURA_CRM]?.newValue) importarLeituraDoCrm().catch((e) => mensagem(e.message));
 });
-lerConfig().then((cfg) => {
-  if (!cfg.apiKey) abrirConfig("Primeiro uso: cole a chave da API do Gemini e clique em Salvar.");
-}).catch(() => {
-});
+lerConfig().then((cfg) => mostrarLeituraLocal(cfg.apiKey)).catch(() => mostrarLeituraLocal(""));
 /*! Bundled license information:
 
 jszip/dist/jszip.min.js:

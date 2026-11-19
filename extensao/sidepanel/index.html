@@ -29,10 +29,10 @@
 
     <section id="config" hidden aria-labelledby="config-titulo">
       <h2 id="config-titulo">Configurações</h2>
-      <label>Chave da API do Gemini
+      <label>Chave da API do Gemini (opcional)
         <input id="cfg-apiKey" type="password" autocomplete="off" placeholder="AIza...">
       </label>
-      <small class="nota">Use uma chave exclusiva desta extensão, de projeto com cobrança ativada (no plano gratuito o Google pode usar os documentos enviados), restrita à "Generative Language API" e com limite de gasto. Troque a chave se o computador for compartilhado.</small>
+      <small class="nota">Sem chave, a leitura dos documentos, da nota e do cartão da ANTT é feita no CRM (Leitura de documentos). Com chave, a extensão também lê aqui. Use uma chave exclusiva desta extensão, de projeto com cobrança ativada (no plano gratuito o Google pode usar os documentos enviados), restrita à "Generative Language API" e com limite de gasto. Troque a chave se o computador for compartilhado.</small>
       <label>Chave da API do Google Maps (Pedágios)
         <input id="cfg-mapsKey" type="password" autocomplete="off" placeholder="AIza...">
       </label>
@@ -71,7 +71,7 @@
     </section>
 
     <section data-etapa="entrada">
-      <label id="zona" tabindex="0" role="button" aria-controls="seletor">
+      <label id="zona" class="so-gemini" tabindex="0" role="button" aria-controls="seletor">
         <span class="zona-icone" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
         </span>
@@ -79,12 +79,14 @@
         <span id="texto-upload">fotos, PDFs ou o .zip da conversa — ou clique para escolher</span>
         <input id="seletor" type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.txt,.zip,.rar" hidden>
       </label>
-      <ul id="lista-arquivos" aria-label="Arquivos selecionados"></ul>
-      <div id="bloco-mensagens" class="bloco-mensagens">
+      <ul id="lista-arquivos" class="so-gemini" aria-label="Arquivos selecionados"></ul>
+      <div id="bloco-mensagens" class="bloco-mensagens so-gemini">
         <label id="rotulo-mensagens" for="mensagens">Informações adicionais</label>
         <textarea id="mensagens" rows="5" placeholder="Cole aqui as mensagens do motorista (telefone, e-mail, estado civil…)"></textarea>
       </div>
-      <button id="btn-ler" disabled>Ler documentos</button>
+      <button id="btn-ler" class="so-gemini" disabled>Ler documentos</button>
+      <button id="btn-ler-crm" type="button" class="secundario">Ler os documentos no CRM</button>
+      <button id="btn-salvos" type="button" class="secundario">Motoristas salvos no CRM</button>
       <button id="btn-historico" class="secundario" hidden>Histórico</button>
       <a href="#" id="link-config">
         <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -132,7 +134,8 @@
         <input id="ciot-contratado-doc" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00">
         <label class="rotulo-campo" for="ciot-contratado-rntrc">RNTRC</label>
         <input id="ciot-contratado-rntrc" inputmode="numeric" autocomplete="off" placeholder="8 ou 9 dígitos">
-        <label class="secundario botao-arquivo" for="ciot-antt-arquivo">Ler cartão da ANTT (foto ou PDF)</label>
+        <button id="btn-antt-crm" type="button" class="secundario">Ler cartão da ANTT no CRM</button>
+        <label class="secundario botao-arquivo so-gemini" for="ciot-antt-arquivo">Ler cartão da ANTT (foto ou PDF)</label>
         <input id="ciot-antt-arquivo" type="file" accept=".jpg,.jpeg,.png,.pdf" hidden>
         <small id="ciot-contratado-origem" class="nota"></small>
       </fieldset>
@@ -140,6 +143,16 @@
       <label class="rotulo-campo" for="ciot-data-fim">Data de fim da viagem</label>
       <input id="ciot-data-fim" type="date">
       <button id="btn-ciot">Preencher CIOT no Webrouter</button>
+    </section>
+
+    <section data-etapa="salvos" hidden>
+      <p class="historico-info"><strong>Motoristas salvos no CRM</strong> pelo botão "Cadastrar motorista" da Leitura de documentos. Clique em "Usar" para conferir e preencher no Sitra.</p>
+      <ul id="lista-salvos" aria-label="Motoristas salvos no CRM"></ul>
+      <p id="salvos-vazio" hidden>Nenhum motorista salvo no CRM.</p>
+      <div class="acoes">
+        <button id="btn-salvos-voltar" class="secundario">Voltar</button>
+        <button id="btn-salvos-atualizar" class="secundario">Atualizar</button>
+      </div>
     </section>
 
     <section data-etapa="historico" hidden>

@@ -6,7 +6,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
   if (msg?.tipo !== 'leitura-crm' || !sender.tab || !ORIGENS_CRM.includes(sender.origin)) return;
   // sidePanel.open precisa vir logo após o clique: chamado antes de qualquer await.
   const abrir = chrome.sidePanel.open({ tabId: sender.tab.id }).then(() => true, () => false);
-  chrome.storage.session.set({ leituraCrm: { leitura: msg.leitura, mensagens: msg.mensagens, em: Date.now() } })
+  chrome.storage.session.set({ leituraCrm: { documento: msg.documento ?? 'cadastro', leitura: msg.leitura, mensagens: msg.mensagens, em: Date.now() } })
     .then(() => abrir)
     .then(painelAberto => responder({ ok: true, painelAberto }))
     .catch(e => responder({ ok: false, erro: e.message }));
